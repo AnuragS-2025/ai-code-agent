@@ -1,7 +1,11 @@
 from fastapi import FastAPI
-from ollama import chat
+from langchain_ollama import ChatOllama
 
 app = FastAPI()
+
+llm = ChatOllama(
+    model="llama3.2:3b"
+)
 
 @app.get("/")
 def home():
@@ -9,14 +13,9 @@ def home():
 
 @app.get("/generate")
 def generate(prompt: str):
-    response = chat(
-        model="llama3.2:3b",
-        messages=[
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ]
-    )
 
-    return {"response": response.message.content}
+    response = llm.invoke(prompt)
+
+    return {
+        "response": response.content
+    }
