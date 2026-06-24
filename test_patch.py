@@ -1,0 +1,3 @@
+from apply_patch import apply_health_endpoint
+
+apply_health_endpoint()
