@@ -10,12 +10,10 @@ print("Loading model...")
 llm = ChatOllama(model="llama3.2:3b")
 
 user_prompt = """
-Add a /health endpoint to app.py.
+Add a POST endpoint /users.
 
-Use the existing code style.
-Modify only what is necessary.
-Do not introduce new libraries or classes.
 Return only the code change.
+Follow existing FastAPI style.
 """
 
 final_prompt = f"""
