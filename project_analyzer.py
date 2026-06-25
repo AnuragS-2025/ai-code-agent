@@ -22,48 +22,77 @@ python_files = []
 print("\n[✓] Collecting project files...\n")
 
 for root, dirs, files in os.walk("."):
+
     dirs[:] = [d for d in dirs if d not in EXCLUDE_DIRS]
 
     for file in files:
+
         if file.endswith(".py"):
             python_files.append(os.path.join(root, file))
 
 print(f"Found {len(python_files)} Python files.\n")
 
 # ==========================================
-# Run Ruff
+# Ruff
 # ==========================================
 
 print("[✓] Running Ruff...\n")
 
-ruff_result = subprocess.run(
+ruff = subprocess.run(
     ["ruff", "check"] + python_files,
     capture_output=True,
     text=True,
+    encoding="utf-8",
+    errors="replace"
 )
 
-ruff_output = ruff_result.stdout + ruff_result.stderr
+ruff_output = ruff.stdout + ruff.stderr
 
 print("✔ Ruff analysis completed.\n")
 
 # ==========================================
-# Run Bandit
+# Bandit
 # ==========================================
 
 print("[✓] Running Bandit...\n")
 
-bandit_result = subprocess.run(
+bandit = subprocess.run(
     ["bandit"] + python_files,
     capture_output=True,
     text=True,
+    encoding="utf-8",
+    errors="replace"
 )
 
-bandit_output = bandit_result.stdout + bandit_result.stderr
+bandit_output = bandit.stdout + bandit.stderr
 
 print("✔ Bandit analysis completed.\n")
 
 # ==========================================
-# Generate AI Summary
+# Semgrep
+# ==========================================
+
+print("[✓] Running Semgrep...\n")
+
+semgrep = subprocess.run(
+    [
+        "semgrep",
+        "scan",
+        "--config=auto",
+        "."
+    ],
+    capture_output=True,
+    text=True,
+    encoding="utf-8",
+    errors="replace"
+)
+
+semgrep_output = semgrep.stdout + semgrep.stderr
+
+print("✔ Semgrep analysis completed.\n")
+
+# ==========================================
+# AI Summary
 # ==========================================
 
 print("[✓] Generating AI Summary...\n")
@@ -75,18 +104,22 @@ llm = ChatOllama(
 prompt = f"""
 You are an expert software engineer.
 
-Analyze the Ruff and Bandit reports.
+Analyze the following reports:
+
+1. Ruff
+2. Bandit
+3. Semgrep
 
 Instructions:
 
-1. Do NOT print any title.
-2. Do NOT repeat raw Ruff or Bandit output.
-3. Merge duplicate issues.
-4. Do NOT suggest removing required imports.
-5. Do NOT repeat the same filename multiple times.
-6. Keep the report concise.
-7. Maximum 2 bullet points per section.
-8. Suggest only practical fixes.
+- Do NOT print a title.
+- Merge duplicate issues.
+- Ignore informational messages.
+- Mention only real issues.
+- If a tool reports no issues, clearly mention it.
+- Do NOT recommend removing required imports.
+- Keep the report concise.
+- Maximum 2 bullet points per section.
 
 Return ONLY this format.
 
@@ -100,6 +133,11 @@ Security Issues
 
 - ...
 
+Semgrep Findings
+----------------
+
+- ...
+
 Recommended Fixes
 -----------------
 
@@ -110,6 +148,9 @@ Ruff Report:
 
 Bandit Report:
 {bandit_output}
+
+Semgrep Report:
+{semgrep_output}
 """
 
 response = llm.invoke(prompt)
@@ -126,6 +167,7 @@ print()
 print(response.content)
 
 print()
+
 print("=" * 60)
 print("                 REVIEW COMPLETED")
 print("=" * 60)
