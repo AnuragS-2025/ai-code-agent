@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.responses import PlainTextResponse
 from langchain_ollama import ChatOllama
 from sentence_transformers import SentenceTransformer
 import chromadb
@@ -6,13 +7,20 @@ import os
 
 app = FastAPI()
 
+# -----------------------------
+# Load Models
+# -----------------------------
 print("Loading embedding model...")
 embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 
 print("Loading LLM...")
 llm = ChatOllama(model="llama3.2:3b")
 
+# -----------------------------
+# Create Vector Store
+# -----------------------------
 print("Creating vector store...")
+
 client = chromadb.Client()
 collection = client.get_or_create_collection("codebase")
 
@@ -42,11 +50,18 @@ for filename in os.listdir(folder):
 
 print("Codebase indexed.")
 
-
+# -----------------------------
+# Home
+# -----------------------------
 @app.get("/")
 def home():
-    return {"message": "AI Agent with RAG Running"}
+    return {
+        "message": "AI Agent with Hybrid RAG Running"
+    }
 
+# -----------------------------
+# Hybrid Generate Endpoint
+# -----------------------------
 @app.get("/generate")
 def generate(prompt: str):
 
@@ -59,9 +74,8 @@ def generate(prompt: str):
         "app.py",
         "database.py",
         "framework",
-        "used in this project",
-        "configuration",
-        "repository"
+        "repository",
+        "configuration"
     ]
 
     use_rag = any(
@@ -89,7 +103,7 @@ Context:
 Question:
 {prompt}
 
-Answer based only on the context.
+Answer only from the given context.
 """
 
         response = llm.invoke(final_prompt)
@@ -106,29 +120,81 @@ Answer based only on the context.
         "response": response.content
     }
 
-    query_embedding = embedding_model.encode(prompt).tolist()
 
-    results = collection.query(
-        query_embeddings=[query_embedding],
-        n_results=1
-    )
+# -----------------------------
+# Plain Code Generation
+# -----------------------------
+@app.get("/generate_code", response_class=PlainTextResponse)
+def generate_code(prompt: str):
 
-    context = results["documents"][0][0]
+    system_prompt = f"""
+You are an expert programmer.
 
-    final_prompt = f"""
-Use the following project context.
+Return ONLY executable code.
 
-Context:
-{context}
+Rules:
+- No markdown
+- No headings
+- No explanations
+- No ``` blocks
+- Only code
 
-Question:
+Task:
+
 {prompt}
-
-Answer based only on the context.
 """
 
-    response = llm.invoke(final_prompt)
+    response = llm.invoke(system_prompt)
+
+    code = response.content
+    code = code.replace("```python", "")
+    code = code.replace("```", "")
+    code = code.strip()
+
+    return code
+
+
+# -----------------------------
+# Generate and Save
+# -----------------------------
+@app.get("/generate_and_save")
+def generate_and_save(prompt: str):
+
+    system_prompt = f"""
+You are an expert software engineer.
+
+Generate COMPLETE executable code.
+
+Rules:
+- Return only code.
+- No markdown.
+- No explanation.
+- Include imports.
+- Include example usage.
+- If Python, include:
+
+if __name__ == "__main__":
+    ...
+
+Task:
+
+{prompt}
+"""
+
+    response = llm.invoke(system_prompt)
+
+    code = response.content
+
+    code = code.replace("```python", "")
+    code = code.replace("```", "")
+    code = code.strip()
+
+    filename = "generated_code.py"
+
+    with open(filename, "w", encoding="utf-8") as f:
+        f.write(code)
 
     return {
-        "response": response.content
+        "message": "Code generated and saved successfully.",
+        "saved_to": filename
     }
