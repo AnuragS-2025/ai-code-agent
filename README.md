@@ -1,131 +1,240 @@
-# AI Code Agent
+# 🤖 AI Code Agent
 
-AI-powered coding assistant built using Ollama, LangChain, FastAPI, ChromaDB, and Sentence Transformers.
+An AI-powered software engineering assistant built with **Python**, **FastAPI**, **LangChain**, **Ollama**, and **ChromaDB**.
 
-The project runs completely locally without any cloud API dependency. It can understand repository code, perform semantic search using embeddings, and generate context-aware responses using a local LLM.
+This project goes beyond simple code generation by integrating Retrieval-Augmented Generation (RAG), static code analysis, and AI-assisted project reviews.
 
-## Features
+---
 
-* Local LLM execution using Ollama
-* LangChain integration
+# 🚀 Features
+
+## ✅ AI Code Generation
+
+* Generate Python code using a local LLM (Ollama)
+* Supports custom prompts
 * FastAPI REST API
-* Dynamic code generation
-* Repository-aware code understanding
-* Codebase file reader
-* Context-aware code generation
-* Basic automated code patching
-* Local RAG (Retrieval Augmented Generation)
-* ChromaDB vector database
-* Sentence Transformer embeddings
-* Semantic code search
-* Interactive Swagger API documentation
-* No cloud API dependency
 
-## Tech Stack
+---
 
-* Python 3.13
-* Ollama
-* Llama 3.2 (3B)
-* LangChain
+## ✅ Hybrid RAG
+
+* Uses ChromaDB as a vector database
+* Retrieves project context before generating responses
+* Falls back to normal LLM generation when project context is not required
+
+---
+
+## ✅ Smart File Management
+
+* Automatically saves generated code into appropriate source files
+* Supports future multi-language expansion
+
+---
+
+## ✅ AI Project Analyzer
+
+Analyzes the entire project using multiple industry-standard tools.
+
+### Ruff
+
+* Python linting
+* Code quality analysis
+* Style checking
+
+### Bandit
+
+* Security vulnerability detection
+* Unsafe coding pattern detection
+
+### Semgrep
+
+* Static code analysis
+* Best practices
+* Security rule scanning
+
+---
+
+## ✅ AI Review Summary
+
+Instead of showing raw analyzer output, the local LLM generates a concise report including:
+
+* Quality Issues
+* Security Issues
+* Semgrep Findings
+* Recommended Fixes
+
+---
+
+# 🏗 Project Architecture
+
+```text
+                AI Code Agent
+
+                       │
+                       ▼
+
+            Collect Project Files
+
+                       │
+
+        ┌──────────────┼──────────────┐
+        │              │              │
+        ▼              ▼              ▼
+
+      Ruff          Bandit        Semgrep
+
+        └──────────────┼──────────────┘
+                       │
+                       ▼
+
+               AI Project Review
+
+                       │
+                       ▼
+
+             Human-readable Summary
+```
+
+---
+
+# 🛠 Tech Stack
+
+* Python
 * FastAPI
-* Uvicorn
+* LangChain
+* Ollama
 * ChromaDB
 * Sentence Transformers
-* Git & GitHub
+* Ruff
+* Bandit
+* Semgrep
 
-## Project Structure
+---
+
+# 📂 Project Structure
 
 ```text
 ai-code-agent/
 │
 ├── app.py
-├── main.py
-├── langchain_test.py
-├── file_reader.py
-├── test_reader.py
-├── apply_patch.py
-├── test_patch.py
-├── embed_codebase.py
-├── rag_test.py
+├── project_analyzer.py
+├── file_manager.py
+├── code_review.py
 ├── rag_langchain.py
-├── README.md
-├── .gitignore
-│
+├── rag_test.py
 ├── codebase/
-│   ├── app.py
-│   └── database.py
-│
-└── venv/
+├── README.md
+└── requirements.txt
 ```
 
-## Architecture
+---
 
-User Prompt
-↓
-Embedding Model
-↓
-ChromaDB Search
-↓
-Relevant Repository Files
-↓
-LangChain
-↓
-Ollama
-↓
-AI Response
+# ▶️ Running the Project
 
-## Implemented Milestones
+## Clone Repository
 
-### Phase 1
+```bash
+git clone https://github.com/AnuragS-2025/ai-code-agent.git
+cd ai-code-agent
+```
 
-* Ollama Setup
+---
+
+## Create Virtual Environment
+
+```bash
+python -m venv venv
+```
+
+Activate:
+
+### Windows
+
+```bash
+venv\Scripts\activate
+```
+
+---
+
+## Install Dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+---
+
+## Start Ollama
+
+```bash
+ollama run llama3.2:3b
+```
+
+---
+
+## Start FastAPI
+
+```bash
+python -m uvicorn app:app --reload
+```
+
+Open:
+
+```
+http://127.0.0.1:8000/docs
+```
+
+---
+
+# 🔍 Analyze the Project
+
+```bash
+python project_analyzer.py
+```
+
+The analyzer performs:
+
+* Ruff Analysis
+* Bandit Security Scan
+* Semgrep Scan
+* AI-generated Project Review
+
+---
+
+# 📌 Current Progress
+
+## Completed
+
 * Local LLM Integration
-* FastAPI Backend
-* Dynamic Prompt Endpoint
-* GitHub Repository Setup
-
-### Phase 2
-
+* FastAPI API
 * LangChain Integration
-* Repository Reader
-* Context Injection
-* Local Embeddings
-* ChromaDB Vector Store
-* Semantic Search
-* Local RAG Pipeline
-
-### Phase 3 (In Progress)
-
-* Multi-file Context Retrieval
-* Repository-aware Code Generation
-* Automated Code Patching
-
-## Example Query
-
-Question:
-
-```text
-Which database is used in this project?
-```
-
-Response:
-
-```text
-The SQLite database (sqlite:///test.db) is used in this project.
-```
-
-## Future Enhancements
-
-* Semgrep-based Code Review
+* Hybrid RAG
+* ChromaDB
+* Smart File Manager
+* AI Code Generation
 * Ruff Integration
+* Bandit Integration
+* Semgrep Integration
+* AI Project Analyzer
+
+---
+
+## Planned
+
+* Auto Fix Agent
 * AST-based Refactoring
-* Automated Test Generation
+* Docker Support
 * Git Automation
-* Multi-file Refactoring
-* Pull Request Generation
+* Streamlit Web UI
+* Multi-language Code Support
+* MCP Integration
 
-## Author
+---
 
-Anurag Sharan
+# 👨‍💻 Author
 
-GitHub: https://github.com/AnuragS-2025
+**Anurag S**
+
+GitHub:
+
+https://github.com/AnuragS-2025
