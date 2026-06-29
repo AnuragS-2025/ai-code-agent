@@ -24,10 +24,17 @@ def run_ruff(python_files):
 
     print("✔ Ruff analysis completed.\n")
 
+    # Ruff error handling
+    if result.returncode not in (0, 1):
+        print("❌ Ruff failed:")
+        print(result.stderr)
+        return []
+
     if not result.stdout.strip():
         return []
 
     try:
         return json.loads(result.stdout)
+
     except json.JSONDecodeError:
         return []

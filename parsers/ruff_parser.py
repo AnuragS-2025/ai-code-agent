@@ -1,39 +1,23 @@
 def parse_ruff(ruff_data):
     """
-    Converts Ruff JSON output into a clean summary.
+    Parse Ruff JSON output into structured issues.
     """
 
     if not ruff_data:
-        return "No quality issues found."
+        return []
 
-    issues = {}
+    issues = []
 
     for issue in ruff_data:
 
-        rule = issue.get("code", "Unknown")
-
-        message = issue.get("message", "")
-
-        filename = issue.get("filename", "")
-
-        if rule not in issues:
-
-            issues[rule] = {
-                "message": message,
-                "files": []
+        issues.append(
+            {
+                "rule": issue.get("code", "Unknown"),
+                "message": issue.get("message", ""),
+                "file": issue.get("filename", ""),
+                "line": issue.get("location", {}).get("row", 0),
+                "column": issue.get("location", {}).get("column", 0),
             }
-
-        if filename not in issues[rule]["files"]:
-            issues[rule]["files"].append(filename)
-
-    summary = []
-
-    for rule, data in issues.items():
-
-        files = ", ".join(data["files"])
-
-        summary.append(
-            f"{rule}: {data['message']} (Files: {files})"
         )
 
-    return "\n".join(summary)
+    return issues
