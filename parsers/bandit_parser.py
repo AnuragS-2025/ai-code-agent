@@ -1,45 +1,30 @@
 def parse_bandit(bandit_data):
     """
-    Converts Bandit JSON output into a clean summary.
+    Parse Bandit JSON output into structured issues.
     """
+
+    if not bandit_data:
+        return []
 
     results = bandit_data.get("results", [])
 
     if not results:
-        return "No security issues found."
+        return []
 
-    issues = {}
+    issues = []
 
     for issue in results:
 
-        rule = issue.get("test_id", "Unknown")
-
-        description = issue.get("issue_text", "")
-
-        severity = issue.get("issue_severity", "")
-
-        filename = issue.get("filename", "")
-
-        if rule not in issues:
-
-            issues[rule] = {
-                "description": description,
-                "severity": severity,
-                "files": []
+        issues.append(
+            {
+                "rule": issue.get("test_id", "Unknown"),
+                "message": issue.get("issue_text", ""),
+                "file": issue.get("filename", ""),
+                "line": issue.get("line_number", 0),
+                "column": issue.get("col_offset", 0),
+                "severity": issue.get("issue_severity", ""),
+                "confidence": issue.get("issue_confidence", ""),
             }
-
-        if filename not in issues[rule]["files"]:
-            issues[rule]["files"].append(filename)
-
-    summary = []
-
-    for rule, data in issues.items():
-
-        files = ", ".join(data["files"])
-
-        summary.append(
-            f"{rule}: {data['description']} "
-            f"(Severity: {data['severity']}, Files: {files})"
         )
 
-    return "\n".join(summary)
+    return issues

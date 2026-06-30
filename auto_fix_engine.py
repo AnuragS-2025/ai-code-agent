@@ -78,6 +78,32 @@ def generate_patch(
         return code_block
 
     # --------------------------------------
+    # Reject hallucinated output
+    # --------------------------------------
+
+    original_lines = len(clean_code.splitlines())
+    generated_lines = len(fixed_block.splitlines())
+
+    if generated_lines > original_lines + 2:
+
+        print("❌ AI modified more than expected.")
+
+        return code_block
+
+    # --------------------------------------
+    # Reject unchanged output
+    # --------------------------------------
+
+    clean_fixed = textwrap.dedent(fixed_block).strip()
+    clean_original = textwrap.dedent(code_block).strip()
+
+    if clean_fixed == clean_original:
+
+        print("⚠ AI returned the original code without any changes.")
+
+        return code_block
+
+    # --------------------------------------
     # Restore indentation
     # --------------------------------------
 
