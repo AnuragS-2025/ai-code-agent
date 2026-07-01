@@ -22,11 +22,17 @@ from auto_fix_engine import generate_patch
 
 
 # ==========================================
-# Configuration
+# Configuration & Safeguards
 # ==========================================
 
 TARGET_FILE = "app.py"
 MAX_ITERATIONS = 20
+
+# Explicitly allowed rules for AI to fix.
+# Rules like B110 and F841 are intentionally omitted to avoid fixer loops/ping-pong.
+AI_FALLBACK_RULES = {
+    "no-eval",
+}
 
 fixed_count = 0
 failed_issues = set()
@@ -81,7 +87,7 @@ for iteration in range(1, MAX_ITERATIONS + 1):
     )
 
     # --------------------------------------
-    # Remove previously failed issues
+    # Remove previously failed or unsupported issues
     # --------------------------------------
 
     issues = [
@@ -141,8 +147,9 @@ for iteration in range(1, MAX_ITERATIONS + 1):
     print("EXTRACTED BLOCK")
     print("=" * 60)
     print(code_block)
+    
     # --------------------------------------
-    # Choose Fixer
+    # Choose Fixer Strategy (Guard Routing)
     # --------------------------------------
 
     if issue["rule"] in RULES:
@@ -161,7 +168,7 @@ for iteration in range(1, MAX_ITERATIONS + 1):
             code_block
         )
 
-    else:
+    elif issue["rule"] in AI_FALLBACK_RULES:
 
         print(
             f"🤖 Using AI fixer for {issue['rule']}"
@@ -171,6 +178,22 @@ for iteration in range(1, MAX_ITERATIONS + 1):
             f"{issue['rule']}: {issue['message']}",
             code_block,
         )
+
+    else:
+
+        print(
+            f"⚠ Skipping unsupported rule: {issue['rule']}"
+        )
+
+        failed_issues.add(
+            (
+                issue["rule"],
+                issue["message"],
+                issue["file"],
+            )
+        )
+
+        continue
 
     # --------------------------------------
     # Generated Patch
