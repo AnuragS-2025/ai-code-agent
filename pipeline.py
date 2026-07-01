@@ -1,3 +1,4 @@
+# pipeline.py
 from analyzers.ruff_runner import run_ruff
 from analyzers.bandit_runner import run_bandit
 from analyzers.semgrep_runner import run_semgrep
@@ -28,9 +29,9 @@ AI_FALLBACK_RULES = {
 }
 
 
-def run_pipeline(target_file: str, max_iterations: int = 20) -> dict:
+def run_pipeline(target_files: list[str], max_iterations: int = 20) -> dict:
     """
-    Runs the full auto-fix pipeline on a given target file or scope.
+    Runs the full auto-fix pipeline on a given list of target files.
     Returns a summary dictionary of the execution.
     """
     fixed_count = 0
@@ -47,29 +48,32 @@ def run_pipeline(target_file: str, max_iterations: int = 20) -> dict:
         print("=" * 60)
 
         # --------------------------------------
-        # Run Ruff
+        # Run Ruff (Handles multiple files smoothly)
         # --------------------------------------
         ruff_issues = parse_ruff(
-            run_ruff([target_file])
+            run_ruff(target_files)
         )
 
         # --------------------------------------
-        # Run Bandit
+        # Run Bandit (Handles multiple files smoothly)
         # --------------------------------------
         bandit_issues = parse_bandit(
-            run_bandit([target_file])
+            run_bandit(target_files)
         )
 
         # --------------------------------------
-        # Run Semgrep
+        # Run Semgrep (Runs iteratively for each target file in the scope)
         # --------------------------------------
-        semgrep_issues = parse_semgrep(
-            run_semgrep(
-                target_file,
-                set(),
-                config="semgrep_test_rule.yml",
+        semgrep_issues = []
+        for target_file in target_files:
+            file_issues = parse_semgrep(
+                run_semgrep(
+                    target_file,
+                    set(),
+                    config="semgrep_test_rule.yml",
+                )
             )
-        )
+            semgrep_issues.extend(file_issues)
 
         # --------------------------------------
         # Merge Issues
@@ -224,7 +228,7 @@ def run_pipeline(target_file: str, max_iterations: int = 20) -> dict:
             cleanup_file(issue["file"])
 
             fixed_count += 1
-            print(f"✔ Fixed {issue['rule']}")
+            print(f"✔ Fixed {issue['rule']} in {issue['file']}")
             print("Re-running analyzers...")
             print("-" * 60)
 
@@ -251,21 +255,12 @@ def run_pipeline(target_file: str, max_iterations: int = 20) -> dict:
 
     if failed_issues:
         print("\nSkipped / Unsupported:")
-        for rule, message, _ in sorted(failed_issues):
-            print(f"- {rule}: {message}")
+        for rule, message, file_path in sorted(failed_issues):
+            print(f"- {rule} in {file_path}: {message}")
 
-    # Return structure for tests/main.py reporting
+    # Pure return structure for clean testing/reporting integration
     return {
         "iterations": iteration,
         "fixed": fixed_count,
         "skipped": len(failed_issues),
     }
-
-
-# Standalone runner for direct debugging/testing
-if __name__ == "__main__":
-    result = run_pipeline(
-        target_file="app.py",
-        max_iterations=20,
-    )
-    print(f"\nPipeline Return Output: {result}")
