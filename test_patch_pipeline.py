@@ -1,5 +1,6 @@
 import sys
 
+
 from analyzers.ruff_runner import run_ruff
 from analyzers.bandit_runner import run_bandit
 from analyzers.semgrep_runner import run_semgrep
@@ -11,6 +12,8 @@ from parsers.semgrep_parser import parse_semgrep
 from patch_engine.extractor import extract_code_block
 from patch_engine.validator import validate_patch
 from patch_engine.replacer import replace_code_block
+
+from patch_engine.file_fixers import cleanup_file
 
 from patch_engine.import_manager import (
     update_imports,
@@ -207,12 +210,28 @@ for iteration in range(1, MAX_ITERATIONS + 1):
 
     if success:
 
+        # --------------------------------------
+        # Update Imports
+        # --------------------------------------
+
         update_imports(
             issue["file"],
             fixed_block,
         )
 
+        # --------------------------------------
+        # File-level Cleanup
+        # --------------------------------------
+
+        cleanup_file(
+            issue["file"],
+        )
+
         fixed_count += 1
+
+        print(f"✔ Fixed {issue['rule']}")
+        print("Re-running analyzers...")
+        print("-" * 60)
 
         print(f"✔ Fixed {issue['rule']}")
         print("Re-running analyzers...")
