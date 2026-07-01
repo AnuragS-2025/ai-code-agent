@@ -12,6 +12,13 @@ from patch_engine.extractor import extract_code_block
 from patch_engine.validator import validate_patch
 from patch_engine.replacer import replace_code_block
 
+from patch_engine.import_manager import (
+    ensure_import,
+    remove_duplicate_imports,
+)
+
+from patch_engine.rule_registry import RULE_FIXERS
+
 from auto_fix_engine import generate_patch
 
 
@@ -20,9 +27,8 @@ from auto_fix_engine import generate_patch
 # ==========================================
 
 SUPPORTED_RULES = {
-    "E722",
+    *RULE_FIXERS.keys(),
     "B105",
-    "B307",
     "no-eval",
 }
 
@@ -157,16 +163,27 @@ for iteration in range(1, MAX_ITERATIONS + 1):
     # Generate Patch
     # --------------------------------------
 
-    fixed_block = generate_patch(
-        f"{issue['rule']}: {issue['message']}",
-        code_block
-    )
+    if issue["rule"] in RULE_FIXERS:
+
+        print(f"⚡ Using built-in fixer for {issue['rule']}")
+
+        fixed_block = RULE_FIXERS[
+            issue["rule"]
+        ](code_block)
+
+    else:
+
+        print(f"🤖 Using AI fixer for {issue['rule']}")
+
+        fixed_block = generate_patch(
+            f"{issue['rule']}: {issue['message']}",
+            code_block,
+        )
 
     print("\n" + "=" * 60)
     print("GENERATED PATCH")
     print("=" * 60)
     print(fixed_block)
-
     # --------------------------------------
     # Validate Patch
     # --------------------------------------
@@ -200,7 +217,9 @@ for iteration in range(1, MAX_ITERATIONS + 1):
 
     if code_block.strip() == fixed_block.strip():
 
-        print(f"⚠ Skipping {issue['rule']} (AI returned original code)")
+        print(
+            f"⚠ Skipping {issue['rule']} (No changes generated)"
+        )
 
         failed_issues.add(
             (
@@ -225,6 +244,28 @@ for iteration in range(1, MAX_ITERATIONS + 1):
     )
 
     if success:
+
+        # --------------------------------------
+        # Import Manager
+        # --------------------------------------
+
+        required_imports = {
+            "ast.literal_eval": "ast",
+            "os.getenv": "os",
+        }
+
+        for usage, module in required_imports.items():
+
+            if usage in fixed_block:
+
+                ensure_import(
+                    issue["file"],
+                    module,
+                )
+
+        remove_duplicate_imports(
+            issue["file"]
+        )
 
         fixed_count += 1
 
