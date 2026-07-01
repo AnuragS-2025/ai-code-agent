@@ -9,13 +9,67 @@ from patch_engine.rule_fixers import (
     fix_no_eval,
 )
 
-RULE_FIXERS = {
-    "E722": fix_e722,
-    "F401": fix_f401,
-    "F811": fix_f811,
-    "E402": fix_e402,
-    "B307": fix_b307,
-    "B110": fix_b110,
-    "B105": fix_b105,
-    "no-eval": fix_no_eval,
+
+RULES = {
+
+    # ==========================================
+    # Ruff
+    # ==========================================
+
+    "E722": {
+        "type": "block",
+        "fixer": fix_e722,
+        "description": "Replace bare except",
+    },
+
+    "F401": {
+        "type": "block",
+        "fixer": fix_f401,
+        "description": "Remove unused import",
+    },
+
+    "F811": {
+        "type": "block",
+        "fixer": fix_f811,
+        "description": "Remove duplicate import",
+    },
+
+    "E402": {
+        "type": "file",
+        "fixer": fix_e402,
+        "description": "Move imports to top",
+    },
+
+    # ==========================================
+    # Bandit
+    # ==========================================
+
+    "B307": {
+        "type": "block",
+        "fixer": fix_b307,
+        "description": "Replace eval()",
+    },
+
+    "B110": {
+        "type": "block",
+        "fixer": fix_b110,
+        "description": "Try Except Pass",
+    },
+
+    "B105": {
+        "type": "block",
+        "fixer": fix_b105,
+        "description": "Hardcoded password",
+    },
+
+    # ==========================================
+    # Semgrep
+    # ==========================================
+
+    "no-eval": {
+        "type": "block",
+        "fixer": fix_no_eval,
+        "description": "Replace eval()",
+    },
+
 }

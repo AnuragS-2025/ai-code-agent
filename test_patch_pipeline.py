@@ -1,6 +1,3 @@
-import sys
-
-
 from analyzers.ruff_runner import run_ruff
 from analyzers.bandit_runner import run_bandit
 from analyzers.semgrep_runner import run_semgrep
@@ -13,13 +10,13 @@ from patch_engine.extractor import extract_code_block
 from patch_engine.validator import validate_patch
 from patch_engine.replacer import replace_code_block
 
-from patch_engine.file_fixers import cleanup_file
-
 from patch_engine.import_manager import (
     update_imports,
 )
 
-from patch_engine.rule_registry import RULE_FIXERS
+from patch_engine.file_fixers import cleanup_file
+
+from patch_engine.rule_registry import RULES
 
 from auto_fix_engine import generate_patch
 
@@ -27,8 +24,6 @@ from auto_fix_engine import generate_patch
 # ==========================================
 # Configuration
 # ==========================================
-
-SUPPORTED_RULES = set(RULE_FIXERS.keys())
 
 TARGET_FILE = "app.py"
 MAX_ITERATIONS = 20
@@ -47,13 +42,25 @@ for iteration in range(1, MAX_ITERATIONS + 1):
     print(f"SCAN ITERATION {iteration}")
     print("=" * 60)
 
+    # --------------------------------------
+    # Run Ruff
+    # --------------------------------------
+
     ruff_issues = parse_ruff(
         run_ruff([TARGET_FILE])
     )
 
+    # --------------------------------------
+    # Run Bandit
+    # --------------------------------------
+
     bandit_issues = parse_bandit(
         run_bandit([TARGET_FILE])
     )
+
+    # --------------------------------------
+    # Run Semgrep
+    # --------------------------------------
 
     semgrep_issues = parse_semgrep(
         run_semgrep(
@@ -63,11 +70,19 @@ for iteration in range(1, MAX_ITERATIONS + 1):
         )
     )
 
+    # --------------------------------------
+    # Merge Issues
+    # --------------------------------------
+
     issues = (
         ruff_issues +
         bandit_issues +
         semgrep_issues
     )
+
+    # --------------------------------------
+    # Remove previously failed issues
+    # --------------------------------------
 
     issues = [
         issue
@@ -84,12 +99,20 @@ for iteration in range(1, MAX_ITERATIONS + 1):
         print("\n✔ No remaining fixable issues.")
         break
 
+    # --------------------------------------
+    # Pick first issue
+    # --------------------------------------
+
     issue = issues[0]
 
     print("\n" + "=" * 60)
     print("ISSUE FOUND")
     print("=" * 60)
     print(issue)
+
+    # --------------------------------------
+    # Extract code block
+    # --------------------------------------
 
     block = extract_code_block(
         issue["file"],
@@ -100,7 +123,9 @@ for iteration in range(1, MAX_ITERATIONS + 1):
 
     if not code_block.strip():
 
-        print(f"⚠ Could not extract block for {issue['rule']}")
+        print(
+            f"⚠ Could not extract block for {issue['rule']}"
+        )
 
         failed_issues.add(
             (
@@ -116,37 +141,40 @@ for iteration in range(1, MAX_ITERATIONS + 1):
     print("EXTRACTED BLOCK")
     print("=" * 60)
     print(code_block)
+    # --------------------------------------
+    # Choose Fixer
+    # --------------------------------------
 
-    if issue["rule"] not in SUPPORTED_RULES:
+    if issue["rule"] in RULES:
 
-        print(f"⚠ Skipping unsupported rule: {issue['rule']}")
+        rule = RULES[issue["rule"]]
 
-        failed_issues.add(
-            (
-                issue["rule"],
-                issue["message"],
-                issue["file"],
-            )
+        print(
+            f"⚡ Using built-in fixer for {issue['rule']}"
         )
 
-        continue
+        print(
+            f"Rule Type : {rule['type']}"
+        )
 
-    if issue["rule"] in RULE_FIXERS:
-
-        print(f"⚡ Using built-in fixer for {issue['rule']}")
-
-        fixed_block = RULE_FIXERS[
-            issue["rule"]
-        ](code_block)
+        fixed_block = rule["fixer"](
+            code_block
+        )
 
     else:
 
-        print(f"🤖 Using AI fixer for {issue['rule']}")
+        print(
+            f"🤖 Using AI fixer for {issue['rule']}"
+        )
 
         fixed_block = generate_patch(
             f"{issue['rule']}: {issue['message']}",
             code_block,
         )
+
+    # --------------------------------------
+    # Generated Patch
+    # --------------------------------------
 
     print("\n" + "=" * 60)
     print("GENERATED PATCH")
@@ -156,6 +184,10 @@ for iteration in range(1, MAX_ITERATIONS + 1):
         print(fixed_block)
     else:
         print("[Code block removed]")
+
+    # --------------------------------------
+    # Validate Patch
+    # --------------------------------------
 
     valid, message = validate_patch(
         fixed_block,
@@ -180,6 +212,10 @@ for iteration in range(1, MAX_ITERATIONS + 1):
 
         continue
 
+    # --------------------------------------
+    # Skip unchanged patch
+    # --------------------------------------
+
     if code_block.strip() == fixed_block.strip():
 
         print(
@@ -197,7 +233,7 @@ for iteration in range(1, MAX_ITERATIONS + 1):
         continue
 
     # --------------------------------------
-    # Replace Code Block
+    # Apply Patch
     # --------------------------------------
 
     print("\nApplying patch...\n")
@@ -220,7 +256,7 @@ for iteration in range(1, MAX_ITERATIONS + 1):
         )
 
         # --------------------------------------
-        # File-level Cleanup
+        # File Cleanup
         # --------------------------------------
 
         cleanup_file(
@@ -228,10 +264,6 @@ for iteration in range(1, MAX_ITERATIONS + 1):
         )
 
         fixed_count += 1
-
-        print(f"✔ Fixed {issue['rule']}")
-        print("Re-running analyzers...")
-        print("-" * 60)
 
         print(f"✔ Fixed {issue['rule']}")
         print("Re-running analyzers...")
