@@ -2,13 +2,32 @@ import os
 import re
 
 
+# ==========================================
+# API -> Required Import Mapping
+# ==========================================
+
+IMPORT_MAP = {
+    "ast.literal_eval": "ast",
+    "os.getenv": "os",
+    "json.loads": "json",
+    "json.dumps": "json",
+    "yaml.safe_load": "yaml",
+    "yaml.safe_dump": "yaml",
+    "Path(": "pathlib",
+    "Path.": "pathlib",
+    "datetime.now": "datetime",
+    "datetime.utcnow": "datetime",
+}
+
+
+# ==========================================
+# Ensure Import Exists
+# ==========================================
+
 def ensure_import(
     filename: str,
     module: str,
 ) -> None:
-    """
-    Ensure that 'import <module>' exists exactly once.
-    """
 
     if not os.path.isfile(filename):
         raise FileNotFoundError(filename)
@@ -18,10 +37,8 @@ def ensure_import(
 
     import_line = f"import {module}"
 
-    for line in lines:
-
-        if line.strip() == import_line:
-            return
+    if any(line.strip() == import_line for line in lines):
+        return
 
     insert_at = 0
 
@@ -40,12 +57,35 @@ def ensure_import(
         file.writelines(lines)
 
 
+# ==========================================
+# Auto Add Required Imports
+# ==========================================
+
+def ensure_required_imports(
+    filename: str,
+    code_block: str,
+) -> None:
+    """
+    Detect APIs used in the generated patch and
+    automatically add the required imports.
+    """
+
+    for api, module in IMPORT_MAP.items():
+
+        if api in code_block:
+            ensure_import(
+                filename,
+                module,
+            )
+
+
+# ==========================================
+# Remove Duplicate Imports
+# ==========================================
+
 def remove_duplicate_imports(
     filename: str,
 ) -> None:
-    """
-    Remove duplicate import statements.
-    """
 
     if not os.path.isfile(filename):
         raise FileNotFoundError(filename)
@@ -73,3 +113,25 @@ def remove_duplicate_imports(
 
     with open(filename, "w", encoding="utf-8") as file:
         file.writelines(output)
+
+
+# ==========================================
+# Full Import Cleanup
+# ==========================================
+
+def update_imports(
+    filename: str,
+    generated_patch: str,
+) -> None:
+    """
+    Perform all import management tasks.
+    """
+
+    ensure_required_imports(
+        filename,
+        generated_patch,
+    )
+
+    remove_duplicate_imports(
+        filename,
+    )

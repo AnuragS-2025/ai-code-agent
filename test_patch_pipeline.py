@@ -13,8 +13,7 @@ from patch_engine.validator import validate_patch
 from patch_engine.replacer import replace_code_block
 
 from patch_engine.import_manager import (
-    ensure_import,
-    remove_duplicate_imports,
+    update_imports,
 )
 
 from patch_engine.rule_registry import RULE_FIXERS
@@ -26,11 +25,7 @@ from auto_fix_engine import generate_patch
 # Configuration
 # ==========================================
 
-SUPPORTED_RULES = {
-    *RULE_FIXERS.keys(),
-    "B105",
-    "no-eval",
-}
+SUPPORTED_RULES = set(RULE_FIXERS.keys())
 
 TARGET_FILE = "app.py"
 MAX_ITERATIONS = 20
@@ -49,45 +44,27 @@ for iteration in range(1, MAX_ITERATIONS + 1):
     print(f"SCAN ITERATION {iteration}")
     print("=" * 60)
 
-    # --------------------------------------
-    # Run Ruff
-    # --------------------------------------
-
     ruff_issues = parse_ruff(
         run_ruff([TARGET_FILE])
     )
-
-    # --------------------------------------
-    # Run Bandit
-    # --------------------------------------
 
     bandit_issues = parse_bandit(
         run_bandit([TARGET_FILE])
     )
 
-    # --------------------------------------
-    # Run Semgrep
-    # --------------------------------------
-
     semgrep_issues = parse_semgrep(
         run_semgrep(
             TARGET_FILE,
             set(),
-            config="semgrep_test_rule.yml"
+            config="semgrep_test_rule.yml",
         )
     )
-
-    # --------------------------------------
-    # Collect Issues
-    # --------------------------------------
 
     issues = (
         ruff_issues +
         bandit_issues +
         semgrep_issues
     )
-
-    # Remove previously failed issues
 
     issues = [
         issue
@@ -111,13 +88,9 @@ for iteration in range(1, MAX_ITERATIONS + 1):
     print("=" * 60)
     print(issue)
 
-    # --------------------------------------
-    # Extract Code Block
-    # --------------------------------------
-
     block = extract_code_block(
         issue["file"],
-        issue["line"]
+        issue["line"],
     )
 
     code_block = block["code"]
@@ -141,10 +114,6 @@ for iteration in range(1, MAX_ITERATIONS + 1):
     print("=" * 60)
     print(code_block)
 
-    # --------------------------------------
-    # Skip unsupported rules
-    # --------------------------------------
-
     if issue["rule"] not in SUPPORTED_RULES:
 
         print(f"⚠ Skipping unsupported rule: {issue['rule']}")
@@ -158,10 +127,6 @@ for iteration in range(1, MAX_ITERATIONS + 1):
         )
 
         continue
-
-    # --------------------------------------
-    # Generate Patch
-    # --------------------------------------
 
     if issue["rule"] in RULE_FIXERS:
 
@@ -183,13 +148,14 @@ for iteration in range(1, MAX_ITERATIONS + 1):
     print("\n" + "=" * 60)
     print("GENERATED PATCH")
     print("=" * 60)
-    print(fixed_block)
-    # --------------------------------------
-    # Validate Patch
-    # --------------------------------------
+
+    if fixed_block.strip():
+        print(fixed_block)
+    else:
+        print("[Code block removed]")
 
     valid, message = validate_patch(
-        fixed_block
+        fixed_block,
     )
 
     print("\n" + "=" * 60)
@@ -210,10 +176,6 @@ for iteration in range(1, MAX_ITERATIONS + 1):
         )
 
         continue
-
-    # --------------------------------------
-    # Skip unchanged patch
-    # --------------------------------------
 
     if code_block.strip() == fixed_block.strip():
 
@@ -245,31 +207,16 @@ for iteration in range(1, MAX_ITERATIONS + 1):
 
     if success:
 
-        # --------------------------------------
-        # Import Manager
-        # --------------------------------------
-
-        required_imports = {
-            "ast.literal_eval": "ast",
-            "os.getenv": "os",
-        }
-
-        for usage, module in required_imports.items():
-
-            if usage in fixed_block:
-
-                ensure_import(
-                    issue["file"],
-                    module,
-                )
-
-        remove_duplicate_imports(
-            issue["file"]
+        update_imports(
+            issue["file"],
+            fixed_block,
         )
 
         fixed_count += 1
 
         print(f"✔ Fixed {issue['rule']}")
+        print("Re-running analyzers...")
+        print("-" * 60)
 
     else:
 
@@ -292,13 +239,13 @@ print("\n" + "=" * 60)
 print("SUMMARY")
 print("=" * 60)
 
-print(f"Iterations          : {iteration}")
+print(f"Iterations Run      : {iteration}")
 print(f"Issues Fixed        : {fixed_count}")
-print(f"Failed Issues       : {len(failed_issues)}")
+print(f"Issues Skipped      : {len(failed_issues)}")
 
 if failed_issues:
 
-    print("\nSkipped:")
+    print("\nSkipped / Unsupported:")
 
     for rule, message, _ in sorted(failed_issues):
 
