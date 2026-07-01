@@ -6,6 +6,122 @@ def build_patch_prompt(
     Build an AI prompt for fixing a single code block.
     """
 
+    special_rules = ""
+
+    # --------------------------------------
+    # Ruff E722
+    # --------------------------------------
+
+    if issue.startswith("E722"):
+
+        special_rules = """
+Special Rule
+============
+
+Replace ONLY:
+
+except:
+
+with:
+
+except Exception:
+
+Do NOT modify any other line.
+
+Example
+=======
+
+Input:
+
+try:
+    collection.delete(ids=[filename])
+except:
+    pass
+
+Output:
+
+try:
+    collection.delete(ids=[filename])
+except Exception:
+    pass
+"""
+
+    # --------------------------------------
+    # Bandit B105
+    # --------------------------------------
+
+    elif issue.startswith("B105"):
+
+        special_rules = """
+Special Rule
+============
+
+Replace ONLY the hardcoded password.
+
+Example
+=======
+
+Input:
+
+password = "admin123"
+
+Output:
+
+password = os.getenv("PASSWORD", "")
+
+Do NOT modify any surrounding code.
+Do NOT add imports unless they already exist.
+"""
+
+    # --------------------------------------
+    # Bandit B307 / Semgrep no-eval
+    # --------------------------------------
+
+    elif issue.startswith("B307") or issue.startswith("no-eval"):
+
+        special_rules = """
+Special Rule
+============
+
+Replace ONLY the use of eval().
+
+Example
+=======
+
+Input:
+
+result = eval(user_input)
+
+Output:
+
+result = ast.literal_eval(user_input)
+
+Do NOT modify surrounding code.
+Do NOT generate try/except blocks.
+Do NOT generate unrelated statements.
+Do NOT reuse code from previous examples.
+"""
+
+    # --------------------------------------
+    # Bandit B110
+    # --------------------------------------
+
+    elif issue.startswith("B110"):
+
+        special_rules = """
+Special Rule
+============
+
+Do NOT rewrite the try block.
+
+If no safe automatic fix exists,
+return the ORIGINAL code block unchanged.
+
+Do NOT add logging.
+Do NOT add print().
+Do NOT change program behaviour.
+"""
+
     prompt = f"""
 You are an expert Python software engineer.
 
@@ -25,149 +141,42 @@ Rules
 =====
 
 1. Fix ONLY the reported issue.
-2. Do NOT rewrite unrelated code.
-3. Preserve existing functionality.
-4. Preserve the original logic.
-5. Preserve the original formatting.
-6. Preserve the original indentation exactly.
-7. Do NOT add new functionality.
-8. Do NOT remove existing functionality.
-9. Do NOT add logging or print statements.
-10. Do NOT add comments.
-11. Do NOT introduce new exception types unless absolutely required.
-12. Do NOT add additional try/except blocks.
-13. Do NOT rename variables, functions, or classes.
-14. Keep the same control flow.
-15. Modify the minimum number of lines possible.
-16. Return ONLY the corrected code block.
-17. Do NOT return the entire file.
-18. Do NOT use Markdown.
-19. Do NOT surround the response with ```.
-20. If the input code block contains only a single statement, return only that single corrected statement.
-21. Do NOT generate surrounding code.
-22. Do NOT infer nearby code.
-23. Do NOT recreate the rest of the file.
-24. Return exactly the same code block boundaries as the input.
-25. Never add code that is not present in the input block.
-26. The number of statements in the output should match the input whenever possible.
+2. Modify the minimum number of lines possible.
+3. Preserve formatting.
+4. Preserve indentation.
+5. Preserve functionality.
+6. Preserve control flow.
+7. Preserve every unchanged line.
+8. Return ONLY the corrected code block.
+9. Never return the entire file.
+10. Never generate surrounding code.
+11. Never infer nearby code.
+12. Never add explanations.
+13. Never add Markdown.
+14. Never surround the answer with ```.
 
-Special Rules
-=============
+Critical Constraints
+====================
 
-If the issue is:
+- The output must have exactly the same scope as the input.
+- If the input contains one statement, return one statement.
+- If the input contains one try/except block, return one try/except block.
+- Do NOT introduce identifiers that do not already exist in the input code block.
+- Do NOT reuse code from previous examples.
+- Do NOT invent helper variables.
+- Do NOT invent functions.
+- Do NOT invent classes.
+- Do NOT invent imports.
+- Never generate unrelated code.
 
-E722: Do not use bare except
-
-Replace ONLY:
-
-except:
-
-with:
-
-except Exception:
-
-Do not modify any other line.
-
---------------------------------------------
-
-If the issue is:
-
-B110: Try, Except, Pass detected.
-
-Replace ONLY:
-
-except:
-    pass
-
-with:
-
-except Exception:
-    pass
-
-Preserve the existing try block.
-Do NOT add logging.
-Do NOT add print statements.
-Do NOT introduce additional exception handling.
-Do NOT change the control flow.
-
---------------------------------------------
-
-If the issue is:
-
-B105: Possible hardcoded password
-
-Replace ONLY the hardcoded password assignment.
-
-Replace:
-
-password = "..."
-
-with:
-
-password = os.getenv("PASSWORD", "")
-
-Return ONLY the corrected assignment.
-
-Do NOT generate surrounding code.
-Do NOT generate helper variables.
-Do NOT generate configuration files.
-Do NOT add explanations.
-Do NOT add comments.
-Do NOT add functions.
-Do NOT add classes.
-Do NOT add imports unless they already exist inside the provided code block.
-
-Output Requirements
-===================
-
-- Return ONLY the corrected version of the provided code block.
-- Do NOT return the entire file.
-- Do NOT generate surrounding code.
-- Do NOT infer missing code.
-- Preserve every unchanged line inside the provided code block.
-- The first line of your response must be the first line of the input code block.
-- The last line of your response must be the last line of the input code block.
-- Keep the same indentation.
-- Keep the same block boundaries.
-- Keep the same number of statements unless fixing the reported issue requires otherwise.
-
-Example
-=======
-
-Input:
-
-try:
-    collection.delete(ids=[filename])
-except:
-    pass
-
-Output:
-
-try:
-    collection.delete(ids=[filename])
-except Exception:
-    pass
+{special_rules}
 
 Expected Output
 ===============
 
 Return ONLY the corrected code block.
 
-Do NOT add explanations.
-Do NOT add Markdown.
-Do NOT add surrounding code.
-Do NOT recreate nearby code.
-Do NOT infer missing code.
-
-The output must contain exactly the same scope as the input.
-
-If the input is one statement, return exactly one corrected statement.
-
-If the input is a try/except block, return only that try/except block.
-
-Do NOT add imports, variables, functions, classes, or additional statements.
-
-Do NOT modify any code outside the given code block.
+Nothing else.
 """
 
     return prompt

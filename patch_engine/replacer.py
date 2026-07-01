@@ -27,6 +27,12 @@ def replace_code_block(
     old_block = old_block.rstrip("\n")
     new_block = new_block.rstrip("\n")
 
+# --------------------------------------
+# Reject empty block
+# --------------------------------------
+    if not old_block.strip():
+     print("\n❌ Empty code block extracted.\n")
+     return False
     # Ensure replacement ends with a newline
     new_block += "\n"
 

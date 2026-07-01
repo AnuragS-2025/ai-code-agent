@@ -102,7 +102,7 @@ def generate_patch(
         print("⚠ AI returned the original code without any changes.")
 
         return code_block
-
+    
     # --------------------------------------
     # Restore indentation
     # --------------------------------------
@@ -114,19 +114,7 @@ def generate_patch(
         indent
     )
 
-    # Ensure newline at end
     fixed_block = fixed_block.rstrip() + "\n"
-
-    # --------------------------------------
-    # Preview
-    # --------------------------------------
-
-    print("=" * 60)
-    print("GENERATED PATCH")
-    print("=" * 60)
-    print(fixed_block)
-    print("=" * 60)
-
     return fixed_block
 
 

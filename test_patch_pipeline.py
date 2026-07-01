@@ -2,13 +2,11 @@ import sys
 
 from analyzers.ruff_runner import run_ruff
 from analyzers.bandit_runner import run_bandit
+from analyzers.semgrep_runner import run_semgrep
 
 from parsers.ruff_parser import parse_ruff
 from parsers.bandit_parser import parse_bandit
-
-# Uncomment after Semgrep integration
-# from analyzers.semgrep_runner import run_semgrep
-# from parsers.semgrep_parser import parse_semgrep
+from parsers.semgrep_parser import parse_semgrep
 
 from patch_engine.extractor import extract_code_block
 from patch_engine.validator import validate_patch
@@ -18,50 +16,89 @@ from auto_fix_engine import generate_patch
 
 
 # ==========================================
-# Run Ruff
+# Configuration
 # ==========================================
 
-ruff_issues = parse_ruff(
-    run_ruff(["app.py"])
-)
+SUPPORTED_RULES = {
+    "E722",
+    "B105",
+    "B307",
+    "no-eval",
+}
+
+TARGET_FILE = "app.py"
+MAX_ITERATIONS = 20
+
+fixed_count = 0
+failed_issues = set()
+
 
 # ==========================================
-# Run Bandit
+# Re-analysis Loop
 # ==========================================
 
-bandit_issues = parse_bandit(
-    run_bandit(["app.py"])
-)
+for iteration in range(1, MAX_ITERATIONS + 1):
 
-# ==========================================
-# Run Semgrep
-# ==========================================
+    print("\n" + "=" * 60)
+    print(f"SCAN ITERATION {iteration}")
+    print("=" * 60)
 
-# semgrep_issues = parse_semgrep(
-#     run_semgrep(".", set())
-# )
+    # --------------------------------------
+    # Run Ruff
+    # --------------------------------------
 
-semgrep_issues = []
+    ruff_issues = parse_ruff(
+        run_ruff([TARGET_FILE])
+    )
 
-# ==========================================
-# Collect Issues
-# ==========================================
+    # --------------------------------------
+    # Run Bandit
+    # --------------------------------------
 
-issues = (
-    ruff_issues +
-    bandit_issues +
-    semgrep_issues
-)
+    bandit_issues = parse_bandit(
+        run_bandit([TARGET_FILE])
+    )
 
-if not issues:
-    print("✔ No issues found.")
-    sys.exit(0)
+    # --------------------------------------
+    # Run Semgrep
+    # --------------------------------------
 
-# ==========================================
-# Process Issues
-# ==========================================
+    semgrep_issues = parse_semgrep(
+        run_semgrep(
+            TARGET_FILE,
+            set(),
+            config="semgrep_test_rule.yml"
+        )
+    )
 
-for issue in issues:
+    # --------------------------------------
+    # Collect Issues
+    # --------------------------------------
+
+    issues = (
+        ruff_issues +
+        bandit_issues +
+        semgrep_issues
+    )
+
+    # Remove previously failed issues
+
+    issues = [
+        issue
+        for issue in issues
+        if (
+            issue["rule"],
+            issue["message"],
+            issue["file"],
+        ) not in failed_issues
+    ]
+
+    if not issues:
+
+        print("\n✔ No remaining fixable issues.")
+        break
+
+    issue = issues[0]
 
     print("\n" + "=" * 60)
     print("ISSUE FOUND")
@@ -79,10 +116,42 @@ for issue in issues:
 
     code_block = block["code"]
 
+    if not code_block.strip():
+
+        print(f"⚠ Could not extract block for {issue['rule']}")
+
+        failed_issues.add(
+            (
+                issue["rule"],
+                issue["message"],
+                issue["file"],
+            )
+        )
+
+        continue
+
     print("\n" + "=" * 60)
     print("EXTRACTED BLOCK")
     print("=" * 60)
     print(code_block)
+
+    # --------------------------------------
+    # Skip unsupported rules
+    # --------------------------------------
+
+    if issue["rule"] not in SUPPORTED_RULES:
+
+        print(f"⚠ Skipping unsupported rule: {issue['rule']}")
+
+        failed_issues.add(
+            (
+                issue["rule"],
+                issue["message"],
+                issue["file"],
+            )
+        )
+
+        continue
 
     # --------------------------------------
     # Generate Patch
@@ -102,7 +171,9 @@ for issue in issues:
     # Validate Patch
     # --------------------------------------
 
-    valid, message = validate_patch(fixed_block)
+    valid, message = validate_patch(
+        fixed_block
+    )
 
     print("\n" + "=" * 60)
     print("PATCH VALIDATION")
@@ -110,19 +181,34 @@ for issue in issues:
     print(message)
 
     if not valid:
+
         print("❌ Validation failed.")
+
+        failed_issues.add(
+            (
+                issue["rule"],
+                issue["message"],
+                issue["file"],
+            )
+        )
+
         continue
-    
+
     # --------------------------------------
     # Skip unchanged patch
     # --------------------------------------
 
-    clean_original = code_block.strip()
-    clean_fixed = fixed_block.strip()
+    if code_block.strip() == fixed_block.strip():
 
-    if clean_original == clean_fixed:
+        print(f"⚠ Skipping {issue['rule']} (AI returned original code)")
 
-        print(f"⚠ Skipping {issue['rule']} (AI did not generate a valid fix.)")
+        failed_issues.add(
+            (
+                issue["rule"],
+                issue["message"],
+                issue["file"],
+            )
+        )
 
         continue
 
@@ -139,6 +225,40 @@ for issue in issues:
     )
 
     if success:
+
+        fixed_count += 1
+
         print(f"✔ Fixed {issue['rule']}")
+
     else:
+
         print("❌ Failed to replace code block.")
+
+        failed_issues.add(
+            (
+                issue["rule"],
+                issue["message"],
+                issue["file"],
+            )
+        )
+
+
+# ==========================================
+# Summary
+# ==========================================
+
+print("\n" + "=" * 60)
+print("SUMMARY")
+print("=" * 60)
+
+print(f"Iterations          : {iteration}")
+print(f"Issues Fixed        : {fixed_count}")
+print(f"Failed Issues       : {len(failed_issues)}")
+
+if failed_issues:
+
+    print("\nSkipped:")
+
+    for rule, message, _ in sorted(failed_issues):
+
+        print(f"- {rule}: {message}")
