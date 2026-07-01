@@ -1,17 +1,30 @@
 import os
 
 
+BLOCK_STARTS = (
+    "try:",
+    "def ",
+    "class ",
+    "if ",
+    "elif ",
+    "else:",
+    "for ",
+    "while ",
+    "with ",
+)
+
+
 def extract_code_block(
     filename: str,
     line_number: int,
 ) -> dict:
     """
-    Extract the smallest code block containing the issue.
+    Extract the smallest logical code block containing an issue.
 
     Returns:
     {
-        "code": original_code_block,
-        "indent": original_indentation
+        "code": ...,
+        "indent": ...
     }
     """
 
@@ -22,63 +35,64 @@ def extract_code_block(
         lines = file.readlines()
 
     issue_index = line_number - 1
-    print(f"\nDEBUG: line_number={line_number}")
-    print(f"DEBUG: total_lines={len(lines)}")
-    print(f"DEBUG: issue_index={issue_index}")
 
-    if 0 <= issue_index < len(lines):
-        print("DEBUG LINE:", repr(lines[issue_index]))
     if issue_index < 0 or issue_index >= len(lines):
         raise ValueError("Invalid line number.")
 
     # --------------------------------------
-    # Check if issue belongs to a try block
+    # Find nearest enclosing block
     # --------------------------------------
 
     start = issue_index
-    inside_try = False
+    inside_block = False
 
     while start >= 0:
 
         stripped = lines[start].lstrip()
 
-        if stripped.startswith("try:"):
-            inside_try = True
+        if stripped.startswith(BLOCK_STARTS):
+
+            inside_block = True
             break
 
-        # Stop searching when a new top-level statement begins
         if start != issue_index:
 
-            current_indent = len(lines[start]) - len(lines[start].lstrip())
+            indent = len(lines[start]) - len(lines[start].lstrip())
 
-            if current_indent == 0:
+            if indent == 0:
                 break
 
         start -= 1
 
     # --------------------------------------
-    # Single statement (non try-block)
+    # Single statement
     # --------------------------------------
-    
-    if not inside_try:
+
+    if not inside_block:
 
         line = lines[issue_index]
 
-        indent_size = len(line) - len(line.lstrip())
-        print("RETURNING SINGLE:")
-        print(repr(line))
+        indent = line[:len(line) - len(line.lstrip())]
+
         return {
             "code": line,
-            "indent": line[:indent_size],
+            "indent": indent,
         }
 
     # --------------------------------------
-    # Extract try block
+    # Determine indentation
     # --------------------------------------
 
-    indent_size = len(lines[start]) - len(lines[start].lstrip())
+    indent_size = (
+        len(lines[start]) -
+        len(lines[start].lstrip())
+    )
 
     indent = lines[start][:indent_size]
+
+    # --------------------------------------
+    # Find block end
+    # --------------------------------------
 
     end = start + 1
 
@@ -88,25 +102,32 @@ def extract_code_block(
 
         stripped = line.strip()
 
-        current_indent = len(line) - len(line.lstrip())
+        current_indent = (
+            len(line) -
+            len(line.lstrip())
+        )
 
-        # Skip blank lines inside block
         if stripped == "":
             end += 1
             continue
 
-        # Stop when another statement begins at same indentation
         if (
             current_indent <= indent_size
-            and not stripped.startswith(("except", "finally", "else"))
+            and not stripped.startswith(
+                (
+                    "except",
+                    "finally",
+                    "else",
+                    "elif",
+                )
+            )
         ):
             break
 
         end += 1
 
     block = "".join(lines[start:end])
-    print("RETURNING TRY BLOCK:")
-    print(repr(block))
+
     return {
         "code": block,
         "indent": indent,
