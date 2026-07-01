@@ -1,4 +1,7 @@
 from langchain_ollama import ChatOllama
+from patch_engine.prompt_builder import build_patch_prompt
+
+import textwrap
 
 
 # ==========================================
@@ -11,82 +14,138 @@ llm = ChatOllama(
 
 
 # ==========================================
-# AI Auto Fix
+# Generate Patch
 # ==========================================
 
-def fix_code(
-    code: str,
-    ruff_report: str,
-    bandit_report: str,
-    semgrep_report: str
+def generate_patch(
+    issue: str,
+    code_block: str
 ) -> str:
     """
-    Generates AI-fixed Python code using analyzer reports.
+    Generate a fixed version of a single code block.
+
+    Args:
+        issue: Static analysis issue
+        code_block: Original extracted code block
+
+    Returns:
+        AI-generated fixed code block with original indentation.
     """
 
-    prompt = f"""
-You are an expert Python software engineer.
+    # --------------------------------------
+    # Detect indentation
+    # --------------------------------------
 
-Your task is to fix ONLY the issues reported by the static analysis tools.
+    indent = ""
 
-You MUST return the COMPLETE updated Python source file.
+    for line in code_block.splitlines():
 
-Static Analysis Reports
-=======================
+        if line.strip():
 
-Ruff Issues:
-{ruff_report}
+            indent = line[:len(line) - len(line.lstrip())]
+            break
 
-Bandit Issues:
-{bandit_report}
+    # --------------------------------------
+    # Remove indentation before sending to AI
+    # --------------------------------------
 
-Semgrep Findings:
-{semgrep_report}
+    clean_code = textwrap.dedent(code_block)
 
-Instructions
-============
+    prompt = build_patch_prompt(
+        issue,
+        clean_code
+    )
 
-- Fix ONLY the reported issues.
-- Return the COMPLETE updated Python file.
-- Never return only a code snippet.
-- Preserve all existing functionality.
-- Preserve the overall project structure.
-- Do NOT rewrite unrelated code.
-- Do NOT refactor unrelated functions.
-- Do NOT add new features.
-- Do NOT remove required imports.
-- Do NOT rename variables, functions, or classes unless required to fix an issue.
-- Modify the minimum number of lines necessary.
-- Leave all unaffected code unchanged.
-- Preserve formatting whenever possible.
-- If no fixes are required, return the original file unchanged.
-- The returned code must be syntactically valid Python.
-- Return ONLY Python code.
-- Do NOT use markdown.
-- Do NOT add explanations.
-- Do NOT add comments describing your changes.
-- Do NOT surround the response with ```.
-
-Original Python File
-====================
-
-{code}
-"""
-
-    print("Sending code to AI...\n")
+    print("[✓] Sending patch request to AI...\n")
 
     response = llm.invoke(prompt)
 
-    fixed_code = response.content
+    # --------------------------------------
+    # Clean AI output
+    # --------------------------------------
 
-    # Remove markdown if returned
-    fixed_code = fixed_code.replace("```python", "")
-    fixed_code = fixed_code.replace("```", "")
-    fixed_code = fixed_code.strip()
+    fixed_block = (
+        response.content
+        .replace("```python", "")
+        .replace("```", "")
+        .strip()
+    )
 
-    # Fallback
-    if not fixed_code:
-        print("❌ AI returned empty response.")
-        return code
+    if not fixed_block:
 
-    return fixed_code
+        print("❌ AI returned an empty response.")
+
+        return code_block
+
+    # --------------------------------------
+    # Reject hallucinated output
+    # --------------------------------------
+
+    original_lines = len(clean_code.splitlines())
+    generated_lines = len(fixed_block.splitlines())
+
+    if generated_lines > original_lines + 2:
+
+        print("❌ AI modified more than expected.")
+
+        return code_block
+
+    # --------------------------------------
+    # Reject unchanged output
+    # --------------------------------------
+
+    clean_fixed = textwrap.dedent(fixed_block).strip()
+    clean_original = textwrap.dedent(code_block).strip()
+
+    if clean_fixed == clean_original:
+
+        print("⚠ AI returned the original code without any changes.")
+
+        return code_block
+    
+    # --------------------------------------
+    # Restore indentation
+    # --------------------------------------
+
+    fixed_block = textwrap.dedent(fixed_block)
+
+    fixed_block = textwrap.indent(
+        fixed_block,
+        indent
+    )
+
+    fixed_block = fixed_block.rstrip() + "\n"
+    return fixed_block
+
+
+# ==========================================
+# Test
+# ==========================================
+
+if __name__ == "__main__":
+
+    sample_issue = "E722: Do not use bare except."
+
+    sample_code = """
+        try:
+            collection.delete(ids=[filename])
+        except:
+            pass
+"""
+
+    print("=" * 60)
+    print("ORIGINAL BLOCK")
+    print("=" * 60)
+    print(sample_code)
+
+    print()
+
+    fixed = generate_patch(
+        sample_issue,
+        sample_code
+    )
+
+    print("=" * 60)
+    print("FINAL PATCH")
+    print("=" * 60)
+    print(fixed)
