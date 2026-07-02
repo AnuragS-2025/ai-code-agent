@@ -19,14 +19,16 @@ from patch_engine.file_fixers import cleanup_file
 from patch_engine.rule_registry import RULES
 from auto_fix_engine import generate_patch
 
+# Phase 3 Intelligence Layer Import
+from patch_engine.issue_prioritizer import prioritize_issues
+
 # ==========================================
 # Global Configuration & Safeguards
 # ==========================================
 
-# Explicitly allowed rules for AI to fix
-AI_FALLBACK_RULES = {
-    "no-eval",
-}
+# AI fallback rules.
+# Currently empty because all supported rules have built-in fixers.
+AI_FALLBACK_RULES = set()
 
 
 def run_pipeline(target_files: list[str], max_iterations: int = 20) -> dict:
@@ -78,11 +80,16 @@ def run_pipeline(target_files: list[str], max_iterations: int = 20) -> dict:
             ) not in failed_issues
         ]
 
+        # --------------------------------------
+        # Prioritize Issues (Deterministic Reordering)
+        # --------------------------------------
+        issues = prioritize_issues(issues)
+
         if not issues:
             print("\n✔ No remaining fixable issues.")
             break
 
-        # Pick first issue
+        # Pick first issue (Now guaranteed to be the highest priority)
         issue = issues[0]
 
         print("\n" + "=" * 60)
