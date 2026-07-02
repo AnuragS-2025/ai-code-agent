@@ -1,240 +1,231 @@
-# 🤖 AI Code Agent
+# AI Code Agent
 
-An AI-powered software engineering assistant built with **Python**, **FastAPI**, **LangChain**, **Ollama**, and **ChromaDB**.
-
-This project goes beyond simple code generation by integrating Retrieval-Augmented Generation (RAG), static code analysis, and AI-assisted project reviews.
+An AI-assisted Python auto-fixing tool that detects issues using static analyzers and automatically applies built-in or AI-generated fixes through an iterative validation pipeline.
 
 ---
 
-# 🚀 Features
+## Features
 
-## ✅ AI Code Generation
-
-* Generate Python code using a local LLM (Ollama)
-* Supports custom prompts
-* FastAPI REST API
-
----
-
-## ✅ Hybrid RAG
-
-* Uses ChromaDB as a vector database
-* Retrieves project context before generating responses
-* Falls back to normal LLM generation when project context is not required
-
----
-
-## ✅ Smart File Management
-
-* Automatically saves generated code into appropriate source files
-* Supports future multi-language expansion
+- Ruff integration
+- Bandit integration
+- Semgrep integration
+- Built-in rule fixers
+- AI fallback for unsupported rules
+- Rule registry architecture
+- Block-level and file-level fixer dispatch
+- Automatic import management
+- Multi-file and directory support
+- CLI interface
+- Iterative re-analysis pipeline
+- Patch validation before applying fixes
 
 ---
 
-## ✅ AI Project Analyzer
+## Project Structure
 
-Analyzes the entire project using multiple industry-standard tools.
+```
+ai-code-agent/
+│
+├── analyzers/
+│   ├── ruff_runner.py
+│   ├── bandit_runner.py
+│   └── semgrep_runner.py
+│
+├── parsers/
+│   ├── ruff_parser.py
+│   ├── bandit_parser.py
+│   └── semgrep_parser.py
+│
+├── patch_engine/
+│   ├── extractor.py
+│   ├── replacer.py
+│   ├── validator.py
+│   ├── rule_fixers.py
+│   ├── rule_registry.py
+│   ├── import_manager.py
+│   └── file_fixers.py
+│
+├── utils/
+│   └── file_discovery.py
+│
+├── pipeline.py
+├── main.py
+├── auto_fix_engine.py
+└── README.md
+```
+
+---
+
+## Pipeline Architecture
+
+```
+                  main.py
+                     │
+                     ▼
+         Discover Target Python Files
+                     │
+                     ▼
+               pipeline.py
+                     │
+                     ▼
+      ┌────────────────────────────┐
+      │ Run Static Analyzers       │
+      │                            │
+      │  • Ruff                    │
+      │  • Bandit                  │
+      │  • Semgrep                 │
+      └────────────────────────────┘
+                     │
+                     ▼
+             Parse Analyzer Output
+                     │
+                     ▼
+             Extract Code Block
+                     │
+                     ▼
+              Rule Registry Lookup
+                     │
+          ┌──────────┴──────────┐
+          │                     │
+          ▼                     ▼
+   Built-in Fixer          AI Fixer
+          │                     │
+          └──────────┬──────────┘
+                     ▼
+             Validate Generated Patch
+                     │
+                     ▼
+              Rule Dispatch Layer
+          ┌──────────┴──────────┐
+          │                     │
+          ▼                     ▼
+     Block Fixer          File Fixer
+          │                     │
+          ▼                     ▼
+    Replace Code        Rewrite File
+          │                     │
+          └──────────┬──────────┘
+                     ▼
+            Import Management
+                     │
+                     ▼
+              File Cleanup
+                     │
+                     ▼
+              Re-run Analyzers
+                     │
+                     ▼
+          Repeat Until Clean
+```
+
+---
+
+## Supported Fixers
 
 ### Ruff
 
-* Python linting
-* Code quality analysis
-* Style checking
+| Rule | Description |
+|------|-------------|
+| E722 | Bare except |
+| F401 | Remove unused imports |
+| F811 | Remove duplicate imports |
+| E402 | Move imports to top (file-level) |
+| W291 | Remove trailing whitespace |
+| W293 | Remove whitespace on blank lines |
+| E303 | Remove excessive blank lines |
 
 ### Bandit
 
-* Security vulnerability detection
-* Unsafe coding pattern detection
+| Rule | Description |
+|------|-------------|
+| B307 | Replace eval() |
+| B105 | Hardcoded password |
 
 ### Semgrep
 
-* Static code analysis
-* Best practices
-* Security rule scanning
+| Rule | Description |
+|------|-------------|
+| no-eval | Replace eval() |
 
 ---
 
-## ✅ AI Review Summary
+## Usage
 
-Instead of showing raw analyzer output, the local LLM generates a concise report including:
-
-* Quality Issues
-* Security Issues
-* Semgrep Findings
-* Recommended Fixes
-
----
-
-# 🏗 Project Architecture
-
-```text
-                AI Code Agent
-
-                       │
-                       ▼
-
-            Collect Project Files
-
-                       │
-
-        ┌──────────────┼──────────────┐
-        │              │              │
-        ▼              ▼              ▼
-
-      Ruff          Bandit        Semgrep
-
-        └──────────────┼──────────────┘
-                       │
-                       ▼
-
-               AI Project Review
-
-                       │
-                       ▼
-
-             Human-readable Summary
-```
-
----
-
-# 🛠 Tech Stack
-
-* Python
-* FastAPI
-* LangChain
-* Ollama
-* ChromaDB
-* Sentence Transformers
-* Ruff
-* Bandit
-* Semgrep
-
----
-
-# 📂 Project Structure
-
-```text
-ai-code-agent/
-│
-├── app.py
-├── project_analyzer.py
-├── file_manager.py
-├── code_review.py
-├── rag_langchain.py
-├── rag_test.py
-├── codebase/
-├── README.md
-└── requirements.txt
-```
-
----
-
-# ▶️ Running the Project
-
-## Clone Repository
+Analyze a single file
 
 ```bash
-git clone https://github.com/AnuragS-2025/ai-code-agent.git
-cd ai-code-agent
+python main.py app.py
 ```
 
----
-
-## Create Virtual Environment
+Analyze multiple files
 
 ```bash
-python -m venv venv
+python main.py app.py utils.py
 ```
 
-Activate:
-
-### Windows
+Analyze an entire directory
 
 ```bash
-venv\Scripts\activate
+python main.py src/
 ```
 
----
-
-## Install Dependencies
+Limit maximum iterations
 
 ```bash
-pip install -r requirements.txt
+python main.py src --max-iterations 30
 ```
 
----
-
-## Start Ollama
+Display help
 
 ```bash
-ollama run llama3.2:3b
+python main.py --help
 ```
 
 ---
 
-## Start FastAPI
+## Current Workflow
 
-```bash
-python -m uvicorn app:app --reload
-```
-
-Open:
-
-```
-http://127.0.0.1:8000/docs
-```
-
----
-
-# 🔍 Analyze the Project
-
-```bash
-python project_analyzer.py
-```
-
-The analyzer performs:
-
-* Ruff Analysis
-* Bandit Security Scan
-* Semgrep Scan
-* AI-generated Project Review
+1. Discover Python files
+2. Run Ruff, Bandit and Semgrep
+3. Parse issues
+4. Extract affected code block
+5. Select built-in fixer or AI fixer
+6. Validate generated patch
+7. Dispatch to block-level or file-level fixer
+8. Update imports
+9. Cleanup file
+10. Re-run analyzers until no supported issues remain
 
 ---
 
-# 📌 Current Progress
+## Current Architecture
 
-## Completed
-
-* Local LLM Integration
-* FastAPI API
-* LangChain Integration
-* Hybrid RAG
-* ChromaDB
-* Smart File Manager
-* AI Code Generation
-* Ruff Integration
-* Bandit Integration
-* Semgrep Integration
-* AI Project Analyzer
+- Modular pipeline
+- Rule registry
+- Built-in fixers
+- AI fallback engine
+- File-level fixers
+- Import manager
+- Automatic validation
+- Multi-file support
+- CLI entrypoint
 
 ---
 
-## Planned
+## Roadmap
 
-* Auto Fix Agent
-* AST-based Refactoring
-* Docker Support
-* Git Automation
-* Streamlit Web UI
-* Multi-language Code Support
-* MCP Integration
+- AST-based extractor
+- AST-aware code replacement
+- AST-based validator
+- Batch issue fixing
+- Rule prioritization
+- Additional built-in fixers
+- Unit and integration tests
+- Configurable analyzer settings
+- Plugin architecture for custom fixers
 
 ---
 
-# 👨‍💻 Author
+## License
 
-**Anurag S**
-
-GitHub:
-
-https://github.com/AnuragS-2025
+This project is intended for educational and research purposes.
