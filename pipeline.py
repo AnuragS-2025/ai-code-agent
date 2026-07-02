@@ -140,14 +140,25 @@ def run_pipeline(target_files: list[str], max_iterations: int = 20) -> dict:
         # --------------------------------------
         # Choose Fixer Strategy (Guard Routing)
         # --------------------------------------
+        rule_meta = None
+        rule_type = "block"  # Default fallback type
+
         if issue["rule"] in RULES:
-            rule = RULES[issue["rule"]]
+            rule_meta = RULES[issue["rule"]]
+            rule_type = rule_meta.get("type", "block")
+            
             print(f"⚡ Using built-in fixer for {issue['rule']}")
-            print(f"Rule Type : {rule['type']}")
-            fixed_block = rule["fixer"](code_block)
+            print(f"Rule Type : {rule_type}")
+            
+            # Pure file fixers operate directly on paths later, no block execution here
+            if rule_type == "block":
+                fixed_block = rule_meta["fixer"](code_block)
+            else:
+                fixed_block = ""
 
         elif issue["rule"] in AI_FALLBACK_RULES:
             print(f"🤖 Using AI fixer for {issue['rule']}")
+            rule_type = "block"
             fixed_block = generate_patch(
                 f"{issue['rule']}: {issue['message']}",
                 code_block,
@@ -165,66 +176,76 @@ def run_pipeline(target_files: list[str], max_iterations: int = 20) -> dict:
             continue
 
         # --------------------------------------
-        # Generated Patch
+        # Validate & Patch Logic (Only for block level fixes)
         # --------------------------------------
-        print("\n" + "=" * 60)
-        print("GENERATED PATCH")
-        print("=" * 60)
+        if rule_type == "block":
+            print("\n" + "=" * 60)
+            print("GENERATED PATCH")
+            print("=" * 60)
 
-        if fixed_block.strip():
-            print(fixed_block)
-        else:
-            print("[Code block removed]")
+            if fixed_block.strip():
+                print(fixed_block)
+            else:
+                print("[Code block removed]")
 
-        # --------------------------------------
-        # Validate Patch
-        # --------------------------------------
-        valid, message = validate_patch(fixed_block)
+            # Validate Patch
+            valid, message = validate_patch(fixed_block)
 
-        print("\n" + "=" * 60)
-        print("PATCH VALIDATION")
-        print("=" * 60)
-        print(message)
+            print("\n" + "=" * 60)
+            print("PATCH VALIDATION")
+            print("=" * 60)
+            print(message)
 
-        if not valid:
-            print("❌ Validation failed.")
-            failed_issues.add(
-                (
-                    issue["rule"],
-                    issue["message"],
-                    issue["file"],
+            if not valid:
+                print("❌ Validation failed.")
+                failed_issues.add(
+                    (
+                        issue["rule"],
+                        issue["message"],
+                        issue["file"],
+                    )
                 )
-            )
-            continue
+                continue
 
-        # --------------------------------------
-        # Skip unchanged patch
-        # --------------------------------------
-        if code_block.strip() == fixed_block.strip():
-            print(f"⚠ Skipping {issue['rule']} (No changes generated)")
-            failed_issues.add(
-                (
-                    issue["rule"],
-                    issue["message"],
-                    issue["file"],
+            # Skip unchanged patch
+            if code_block.strip() == fixed_block.strip():
+                print(f"⚠ Skipping {issue['rule']} (No changes generated)")
+                failed_issues.add(
+                    (
+                        issue["rule"],
+                        issue["message"],
+                        issue["file"],
+                    )
                 )
-            )
-            continue
+                continue
 
         # --------------------------------------
-        # Apply Patch
+        # Step 2: Naya Dispatch Logic
         # --------------------------------------
         print("\nApplying patch...\n")
+        success = False
 
-        success = replace_code_block(
-            issue["file"],
-            code_block,
-            fixed_block,
-        )
+        if rule_type == "block":
+            success = replace_code_block(
+                issue["file"],
+                code_block,
+                fixed_block,
+            )
+        elif rule_type == "file" and rule_meta is not None:
+            rule_meta["fixer"](issue["file"])
+            success = True
+        else:
+            success = False
 
+        # --------------------------------------
+        # Step 3 & 4: Post-Fix & Cleanup Flow
+        # --------------------------------------
         if success:
-            # Update Imports & Cleanup File
-            update_imports(issue["file"], fixed_block)
+            # update_imports() sirf block rules ke baad chalega
+            if rule_type == "block":
+                update_imports(issue["file"], fixed_block)
+            
+            # cleanup_file() dono cases mein chalega
             cleanup_file(issue["file"])
 
             fixed_count += 1
@@ -233,7 +254,7 @@ def run_pipeline(target_files: list[str], max_iterations: int = 20) -> dict:
             print("-" * 60)
 
         else:
-            print("❌ Failed to replace code block.")
+            print(f"❌ Failed to apply patch for rule type: {rule_type}")
             failed_issues.add(
                 (
                     issue["rule"],
@@ -258,7 +279,6 @@ def run_pipeline(target_files: list[str], max_iterations: int = 20) -> dict:
         for rule, message, file_path in sorted(failed_issues):
             print(f"- {rule} in {file_path}: {message}")
 
-    # Pure return structure for clean testing/reporting integration
     return {
         "iterations": iteration,
         "fixed": fixed_count,
