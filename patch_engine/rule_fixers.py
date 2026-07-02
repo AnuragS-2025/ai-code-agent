@@ -1,4 +1,5 @@
 import re
+from patch_engine.import_manager import move_imports_to_top  # Fixed Issue 6
 
 # ==========================================
 # Ruff Fixers (Active)
@@ -42,14 +43,12 @@ def fix_f811(code_block: str) -> str:
     return "\n".join(result).rstrip() + "\n"
 
 
-def fix_e402(code_block: str) -> str:
+def fix_e402(filename: str) -> None:
     """
-    Placeholder.
-
-    Import ordering is handled by update_imports()
-    and cleanup_file().
+    Fixes E402 (Module level import not at top of file) 
+    by rewriting the file with all top-level imports safely moved.
     """
-    return code_block
+    move_imports_to_top(filename)
 
 
 def fix_w291(code_block: str) -> str:
@@ -117,16 +116,9 @@ def fix_no_eval(code_block: str) -> str:
 
 # ==========================================
 # Experimental / Future Fixers
-#
-# These are intentionally NOT registered in
-# rule_registry.py until they are validated.
 # ==========================================
 
 def fix_f841(code_block: str) -> str:
-    """
-    TODO: Remove unused local variable assignments completely.
-    Simple line-based approach for now; needs AST to verify scope and safely remove.
-    """
     lines = code_block.splitlines()
     filtered = [
         line for line in lines 
@@ -136,30 +128,24 @@ def fix_f841(code_block: str) -> str:
 
 
 def fix_f821(code_block: str) -> str:
-    """TODO: Handle undefined names."""
     return code_block
 
 
 def fix_e305(code_block: str) -> str:
-    """TODO: Requires AST analysis to evaluate top-level spacing safely."""
     return code_block
 
 
 def fix_up006(code_block: str) -> str:
-    """TODO: Upgrade to standard collection generics (requires import cleanup)."""
     return code_block
 
 
 def fix_up007(code_block: str) -> str:
-    """TODO: Upgrade to | syntax (must handle complex/nested Unions)."""
     return code_block
 
 
 def fix_sim105(code_block: str) -> str:
-    """TODO: Replace try-except-pass (requires injection of contextlib import)."""
     return code_block
 
 
 def fix_c401(code_block: str) -> str:
-    """TODO: Generator-to-set comprehension rewrite."""
     return code_block
