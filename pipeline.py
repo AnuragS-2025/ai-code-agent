@@ -19,8 +19,9 @@ from patch_engine.file_fixers import cleanup_file
 from patch_engine.rule_registry import RULES
 from auto_fix_engine import generate_patch
 
-# Phase 3 Intelligence Layer Import
+# Phase 3 Intelligence Layer Imports
 from patch_engine.issue_prioritizer import prioritize_issues
+from config.settings import settings
 
 # ==========================================
 # Global Configuration & Safeguards
@@ -28,14 +29,20 @@ from patch_engine.issue_prioritizer import prioritize_issues
 
 # AI fallback rules.
 # Currently empty because all supported rules have built-in fixers.
-AI_FALLBACK_RULES = set()
+AI_FALLBACK_RULES = {
+    # Future AI-only rules
+}
 
 
-def run_pipeline(target_files: list[str], max_iterations: int = 20) -> dict:
+def run_pipeline(target_files: list[str], max_iterations: int = None) -> dict:
     """
     Runs the full auto-fix pipeline on a given list of target files.
     Returns a summary dictionary of the execution.
     """
+    # Use explicit parameter override if provided; otherwise, fall back to global settings
+    if max_iterations is None:
+        max_iterations = settings.max_iterations
+
     fixed_count = 0
     failed_issues = set()
     iteration = 0
@@ -50,21 +57,28 @@ def run_pipeline(target_files: list[str], max_iterations: int = 20) -> dict:
         print("=" * 60)
 
         # --------------------------------------
-        # Run Analyzers
+        # Run Analyzers (Controlled via clean property toggles)
         # --------------------------------------
-        ruff_issues = parse_ruff(run_ruff(target_files))
-        bandit_issues = parse_bandit(run_bandit(target_files))
+        ruff_issues = []
+        if settings.ruff_enabled:
+            ruff_issues = parse_ruff(run_ruff(target_files))
+
+        bandit_issues = []
+        if settings.bandit_enabled:
+            bandit_issues = parse_bandit(run_bandit(target_files))
         
         semgrep_issues = []
-        for target_file in target_files:
-            file_issues = parse_semgrep(
-                run_semgrep(
-                    target_file,
-                    set(),
-                    config="semgrep_test_rule.yml",
+        if settings.semgrep_enabled:
+            semgrep_config = settings.semgrep_config_path
+            for target_file in target_files:
+                file_issues = parse_semgrep(
+                    run_semgrep(
+                        target_file,
+                        set(),
+                        config=semgrep_config,
+                    )
                 )
-            )
-            semgrep_issues.extend(file_issues)
+                semgrep_issues.extend(file_issues)
 
         # Merge Issues
         issues = ruff_issues + bandit_issues + semgrep_issues
@@ -141,7 +155,8 @@ def run_pipeline(target_files: list[str], max_iterations: int = 20) -> dict:
             else:
                 fixed_block = ""
 
-        elif issue["rule"] in AI_FALLBACK_RULES:
+        # AI fallback rules are evaluated only if AI features are globally activated in the settings
+        elif issue["rule"] in AI_FALLBACK_RULES and settings.ai_enabled:
             print(f"🤖 Using AI fixer for {issue['rule']}")
             rule_type = "block"
             fixed_block = generate_patch(

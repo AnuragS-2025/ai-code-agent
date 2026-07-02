@@ -1,0 +1,33 @@
+# config/default.yaml
+# Central configuration file for the auto-fix engine
+
+ai_settings:
+  enable_ai: false
+
+pipeline_settings:
+  max_iterations: 20
+
+analyzer_settings:
+  ruff:
+    enabled: true
+  bandit:
+    enabled: true
+  semgrep:
+    enabled: true
+    config_path: "semgrep_test_rule.yml"
+
+# Rule priority mapping: higher values mean higher fix priority.
+# Categorized strictly by: Security > Correctness > Cleanup > Formatting
+rule_priorities:
+  B307: 100
+  no-eval: 90
+  B105: 80
+  E722: 70
+  F811: 60
+  F401: 50
+  E402: 40
+  E303: 30
+  W291: 20
+  W293: 10
+
+disabled_rules: []
