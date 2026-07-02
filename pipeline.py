@@ -23,7 +23,7 @@ from auto_fix_engine import generate_patch
 # Global Configuration & Safeguards
 # ==========================================
 
-# Explicitly allowed rules for AI to fix (defined at module level to avoid re-allocation)
+# Explicitly allowed rules for AI to fix
 AI_FALLBACK_RULES = {
     "no-eval",
 }
@@ -36,7 +36,7 @@ def run_pipeline(target_files: list[str], max_iterations: int = 20) -> dict:
     """
     fixed_count = 0
     failed_issues = set()
-    iteration = 0  # Safe initialization to prevent UnboundLocalError in summary
+    iteration = 0
 
     # ==========================================
     # Re-analysis Loop
@@ -48,22 +48,11 @@ def run_pipeline(target_files: list[str], max_iterations: int = 20) -> dict:
         print("=" * 60)
 
         # --------------------------------------
-        # Run Ruff (Handles multiple files smoothly)
+        # Run Analyzers
         # --------------------------------------
-        ruff_issues = parse_ruff(
-            run_ruff(target_files)
-        )
-
-        # --------------------------------------
-        # Run Bandit (Handles multiple files smoothly)
-        # --------------------------------------
-        bandit_issues = parse_bandit(
-            run_bandit(target_files)
-        )
-
-        # --------------------------------------
-        # Run Semgrep (Runs iteratively for each target file in the scope)
-        # --------------------------------------
+        ruff_issues = parse_ruff(run_ruff(target_files))
+        bandit_issues = parse_bandit(run_bandit(target_files))
+        
         semgrep_issues = []
         for target_file in target_files:
             file_issues = parse_semgrep(
@@ -75,18 +64,10 @@ def run_pipeline(target_files: list[str], max_iterations: int = 20) -> dict:
             )
             semgrep_issues.extend(file_issues)
 
-        # --------------------------------------
         # Merge Issues
-        # --------------------------------------
-        issues = (
-            ruff_issues +
-            bandit_issues +
-            semgrep_issues
-        )
+        issues = ruff_issues + bandit_issues + semgrep_issues
 
-        # --------------------------------------
         # Remove previously failed or unsupported issues
-        # --------------------------------------
         issues = [
             issue
             for issue in issues
@@ -101,9 +82,7 @@ def run_pipeline(target_files: list[str], max_iterations: int = 20) -> dict:
             print("\n✔ No remaining fixable issues.")
             break
 
-        # --------------------------------------
         # Pick first issue
-        # --------------------------------------
         issue = issues[0]
 
         print("\n" + "=" * 60)
@@ -112,7 +91,7 @@ def run_pipeline(target_files: list[str], max_iterations: int = 20) -> dict:
         print(issue)
 
         # --------------------------------------
-        # Extract code block
+        # Extract precise block using updated AST Extractor
         # --------------------------------------
         block = extract_code_block(
             issue["file"],
@@ -150,7 +129,6 @@ def run_pipeline(target_files: list[str], max_iterations: int = 20) -> dict:
             print(f"⚡ Using built-in fixer for {issue['rule']}")
             print(f"Rule Type : {rule_type}")
             
-            # Pure file fixers operate directly on paths later, no block execution here
             if rule_type == "block":
                 fixed_block = rule_meta["fixer"](code_block)
             else:
@@ -176,7 +154,7 @@ def run_pipeline(target_files: list[str], max_iterations: int = 20) -> dict:
             continue
 
         # --------------------------------------
-        # Validate & Patch Logic (Only for block level fixes)
+        # Validate Generated Patch (Only for block level fixes)
         # --------------------------------------
         if rule_type == "block":
             print("\n" + "=" * 60)
@@ -220,15 +198,17 @@ def run_pipeline(target_files: list[str], max_iterations: int = 20) -> dict:
                 continue
 
         # --------------------------------------
-        # Step 2: Naya Dispatch Logic
+        # Dispatch Logic Using Line Coordinate Ranges
         # --------------------------------------
         print("\nApplying patch...\n")
         success = False
 
         if rule_type == "block":
+            # Passing coordinates metadata rather than raw old text search
             success = replace_code_block(
                 issue["file"],
-                code_block,
+                block["start"],
+                block["end"],
                 fixed_block,
             )
         elif rule_type == "file" and rule_meta is not None:
@@ -238,14 +218,12 @@ def run_pipeline(target_files: list[str], max_iterations: int = 20) -> dict:
             success = False
 
         # --------------------------------------
-        # Step 3 & 4: Post-Fix & Cleanup Flow
+        # Post-Fix & Cleanup Flow
         # --------------------------------------
         if success:
-            # update_imports() sirf block rules ke baad chalega
             if rule_type == "block":
                 update_imports(issue["file"], fixed_block)
             
-            # cleanup_file() dono cases mein chalega
             cleanup_file(issue["file"])
 
             fixed_count += 1
@@ -254,7 +232,7 @@ def run_pipeline(target_files: list[str], max_iterations: int = 20) -> dict:
             print("-" * 60)
 
         else:
-            print(f"❌ Failed to apply patch for rule type: {rule_type}")
+            print(f"❌ Failed to apply patch for rule type '{rule_type}' (Check file bounds or structural state).")
             failed_issues.add(
                 (
                     issue["rule"],

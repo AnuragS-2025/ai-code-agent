@@ -109,7 +109,8 @@ def extract_code_block(
             }
             
     except Exception:
-        # Catch generic exceptions (SyntaxError, UnicodeDecodeError, etc.) safely
+        # Fixed: Removed unused 'exc' completely to avoid Ruff F841 warnings.
+        # Fallback to single line extraction cleanly for unparsed states.
         pass
 
     # --------------------------------------
@@ -151,21 +152,3 @@ def extract_multiple_blocks(
         )
 
     return blocks
-
-
-# ==========================================
-# Local Verification / Test Runner
-# ==========================================
-if __name__ == "__main__":
-    test_file = "app.py"
-    if os.path.exists(test_file):
-        data = extract_code_block(test_file, 42)
-        print("=" * 60)
-        print("EXTRACTED AST BLOCK")
-        print("=" * 60)
-        print(data["code"])
-        print("=" * 60)
-        print("METADATA")
-        print("=" * 60)
-        print(f"Indent : {repr(data['indent'])}")
-        print(f"Range  : {data['start']} -> {data['end']}")
