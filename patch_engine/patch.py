@@ -1,5 +1,3 @@
-# patch_engine/patch.py
-
 from dataclasses import dataclass
 
 
@@ -16,4 +14,5 @@ class Patch:
     rule: str
     start: int
     end: int
+    original: str          # Added to allow rich debugging, structural diffs, and safe rollbacks
     replacement: str

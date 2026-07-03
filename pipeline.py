@@ -1,3 +1,4 @@
+import os
 import time
 from analyzers.ruff_runner import run_ruff
 from analyzers.bandit_runner import run_bandit
@@ -44,43 +45,64 @@ AI_FALLBACK_RULES = {
 # ==========================================
 
 def _run_analyzers_and_filter(target_files: list[str], failed_issues: set) -> list[dict]:
-    """Runs all enabled static analysis tools, aggregates issues, and filters out known failures."""
+    """Runs all enabled static analysis tools, aggregates issues, and normalizes file paths."""
     logger.info(">>> [START] Analyzer Rescan Sequence")
     
-    ruff_issues = parse_ruff(run_ruff(target_files)) if settings.ruff_enabled else []
-    bandit_issues = parse_bandit(run_bandit(target_files)) if settings.bandit_enabled else []
+    # Normalize input target files to absolute structural paths
+    normalized_targets = [os.path.normpath(os.path.abspath(f)) for f in target_files]
+    
+    ruff_issues = parse_ruff(run_ruff(normalized_targets)) if settings.ruff_enabled else []
+    bandit_issues = parse_bandit(run_bandit(normalized_targets)) if settings.bandit_enabled else []
     
     semgrep_issues = []
     if settings.semgrep_enabled:
         semgrep_config = settings.semgrep_config_path
-        for target_file in target_files:
+        for target_file in normalized_targets:
             file_issues = parse_semgrep(run_semgrep(target_file, set(), config=semgrep_config))
             semgrep_issues.extend(file_issues)
 
-    issues = ruff_issues + bandit_issues + semgrep_issues
+    raw_issues = ruff_issues + bandit_issues + semgrep_issues
     logger.info("<<< [END] Analyzer Rescan Sequence")
     
-    # Filter out previously failed historical execution footprints
-    return [
-        issue for issue in issues 
-        if (issue["rule"], issue["message"], issue["file"]) not in failed_issues
-    ]
+    # Normalize output paths across all engine diagnostics to eliminate duplicates
+    processed_issues = []
+    for issue in raw_issues:
+        issue["file"] = os.path.normpath(os.path.abspath(issue["file"]))
+        
+        # Deduplicate using absolute key footprints against previous failure states
+        if (issue["rule"], issue["message"], issue["file"]) not in failed_issues:
+            processed_issues.append(issue)
+            
+    return processed_issues
 
 
 def _collect_patches(filtered_issues: list[dict], failed_issues: set, metrics: dict, affected_files: set) -> list[Patch]:
-    """Processes filtered issues sequentially, extracts code blocks, runs fixes, validates, and builds non-conflicting patches."""
+    """Processes filtered issues sequentially, extracts code blocks, and builds non-conflicting patches."""
     collected_patches = []
     
+    # Line Drift Safeguard Set: Restrict execution to 1 structural patch per file per iteration
+    files_touched_this_iteration = set()
+    
     for issue in filtered_issues:
-        logger.info("Processing Issue | Rule=%s File=%s Line=%s", issue["rule"], issue["file"], issue["line"])
+        target_file = issue["file"]
+        
+        # Dynamic check for structural collision safeguards
+        if target_file in files_touched_this_iteration:
+            logger.debug(
+                "Line-Drift Prevention | Skipping rule %s for file %s. Retrained for next cycle rescan.",
+                issue["rule"], target_file
+            )
+            continue
+
+        logger.info("Processing Issue | Rule=%s File=%s Line=%s", issue["rule"], target_file, issue["line"])
         logger.debug("Issue Details: %s", issue)
 
-        block = extract_code_block(issue["file"], issue["line"])
+        block = extract_code_block(target_file, issue["line"])
         code_block = block["code"]
 
         if not code_block.strip():
             logger.warning("⚠ Could not extract block structures for %s", issue["rule"])
-            failed_issues.add((issue["rule"], issue["message"], issue["file"]))
+            failed_issues.add((issue["rule"], issue["message"], target_file))
             metrics["failed_validation"] += 1
             continue
 
@@ -100,29 +122,32 @@ def _collect_patches(filtered_issues: list[dict], failed_issues: set, metrics: d
             fixed_block = generate_patch(f"{issue['rule']}: {issue['message']}", code_block)
         else:
             logger.warning("⚠ Skipping unsupported rule: %s", issue["rule"])
-            failed_issues.add((issue["rule"], issue["message"], issue["file"]))
+            failed_issues.add((issue["rule"], issue["message"], target_file))
             metrics["unsupported_rules"] += 1
             continue
 
         if rule_type == "block":
-            logger.debug("Generated Patch Payload:\n%s", fixed_block) if fixed_block.strip() else logger.debug("Generated Patch Payload: [Block removed]")
+            if fixed_block.strip():
+                logger.debug("Generated Patch Payload:\n%s", fixed_block)
+            else:
+                logger.debug("Generated Patch Payload: [Block removed]")
 
             valid, message = validate_patch(fixed_block)
             logger.info("Patch Validation Result: %s", message)
 
             if not valid:
                 logger.error("❌ Validation constraints failed.")
-                failed_issues.add((issue["rule"], issue["message"], issue["file"]))
+                failed_issues.add((issue["rule"], issue["message"], target_file))
                 metrics["failed_validation"] += 1
                 continue
 
             if code_block.strip() == fixed_block.strip():
                 logger.warning("⚠ Skipping %s (No operational delta generated)", issue["rule"])
-                failed_issues.add((issue["rule"], issue["message"], issue["file"]))
+                failed_issues.add((issue["rule"], issue["message"], target_file))
                 continue
 
             new_patch = Patch(
-                file=issue["file"],
+                file=target_file,
                 rule=issue["rule"],
                 start=block["start"],
                 end=block["end"],
@@ -130,7 +155,7 @@ def _collect_patches(filtered_issues: list[dict], failed_issues: set, metrics: d
                 replacement=fixed_block
             )
 
-            # Performance optimized inline lookups with explicit string template formatting requirements
+            # Strict cross-reference checker
             conflict_found = False
             for existing_patch in collected_patches:
                 if has_conflict(existing_patch, new_patch):
@@ -149,19 +174,21 @@ def _collect_patches(filtered_issues: list[dict], failed_issues: set, metrics: d
                 continue
 
             collected_patches.append(new_patch)
+            files_touched_this_iteration.add(target_file)
             metrics["patches_created"] += 1
 
         elif rule_type == "file" and rule_meta is not None:
             logger.info("Executing immediate file-level rule logic: %s", issue["rule"])
-            rule_meta["fixer"](issue["file"])
-            affected_files.add(issue["file"])
+            rule_meta["fixer"](target_file)
+            affected_files.add(target_file)
+            files_touched_this_iteration.add(target_file)
             metrics["patches_applied"] += 1
 
     return collected_patches
 
 
 def _apply_batch(collected_patches: list[Patch], filtered_issues: list[dict], failed_issues: set, metrics: dict, affected_files: set) -> None:
-    """Commits all verified code updates securely across designated line ranges on disk coordinates."""
+    """Commits verified code blocks down onto absolute storage addresses accurately."""
     if not collected_patches:
         return
 
@@ -184,7 +211,7 @@ def _apply_batch(collected_patches: list[Patch], filtered_issues: list[dict], fa
 
 
 def _run_cleanup(affected_files: set) -> None:
-    """Executes single-pass imports resolution and file formatting with rigorous exception scoping guards."""
+    """Executes centralized high-resiliency auto-import generation and codebase linting updates."""
     if not affected_files:
         return
 
@@ -199,18 +226,19 @@ def _run_cleanup(affected_files: set) -> None:
             cleanup_file(affected_file)
             logger.info("✔ Post-fix operations successfully executed for file: %s", affected_file)
         except Exception:
-            logger.exception("❌ Error or Crash isolated running post-fix pipeline cleanup hooks on %s", affected_file)
+            logger.exception("❌ Crash isolated running post-fix pipeline cleanup hooks on %s", affected_file)
 
     logger.info("<<< [END] Single-Pass Post-Fix File Cleanup Loop")
 
 
 def _log_summary(iteration: int, metrics: dict, failed_count: int) -> None:
-    """Prints comprehensive statistical and performance matrices inside standard outputs."""
+    """Prints a clear summary matrix inside system streams."""
     logger.info("=" * 50)
     logger.info("PIPELINE EXECUTION METRICS SUMMARY")
     logger.info("=" * 50)
     logger.info("Iterations Executed          : %d", iteration)
-    logger.info("Total Issues Found           : %d", metrics["total_found"])
+    # Metric successfully renamed to represent cumulative tracking correctly
+    logger.info("Total Issues Processed       : %d", metrics["total_found"])
     logger.info("Issues Selected              : %d", metrics["issues_selected"])
     logger.info("Patches Created              : %d", metrics["patches_created"])
     logger.info("Patches Applied              : %d", metrics["patches_applied"])
@@ -228,8 +256,8 @@ def _log_summary(iteration: int, metrics: dict, failed_count: int) -> None:
 
 def run_pipeline(target_files: list[str], max_iterations: int | None = None) -> dict:
     """
-    Runs the full auto-fix pipeline on a given list of target files using an optimized 
-    modular batch orchestrator strategy.
+    Runs the full auto-fix pipeline on a given list of target files using an optimized
+    modular orchestration strategy.
     """
     start_time = time.perf_counter()
 
@@ -239,7 +267,6 @@ def run_pipeline(target_files: list[str], max_iterations: int | None = None) -> 
     failed_issues = set()
     iteration = 0
 
-    # Unified Telemetry Repository State Mapping
     metrics = {
         "total_found": 0,
         "issues_selected": 0,
@@ -262,7 +289,7 @@ def run_pipeline(target_files: list[str], max_iterations: int | None = None) -> 
         logger.info("SCAN ITERATION %d", iteration)
         logger.info("=" * 50)
 
-        # 1. Scanning and Deduplication Phase
+        # 1. Scanning and Normalization Phase
         discovered_issues = _run_analyzers_and_filter(target_files, failed_issues)
         metrics["total_found"] += len(discovered_issues)
         logger.info("Total issues discovered by static analysis engines: %d", len(discovered_issues))
@@ -283,7 +310,7 @@ def run_pipeline(target_files: list[str], max_iterations: int | None = None) -> 
 
         affected_files = set()
 
-        # 3. Code Extraction and Collections Phase
+        # 3. Code Extraction and Safe Tracking Collections Phase
         collected_patches = _collect_patches(filtered_issues, failed_issues, metrics, affected_files)
         logger.info("Collected patches compiled for execution batch window: %d", len(collected_patches))
         logger.info("Skipped conflicting structural patches within current loop: %d", metrics["conflicts_skipped"])
@@ -297,7 +324,7 @@ def run_pipeline(target_files: list[str], max_iterations: int | None = None) -> 
 
         # 5. Cleanups Phase
         _run_cleanup(affected_files)
-        metrics["files_modified"] += len(affected_files)
+        metrics["files_modified"] = len(affected_files)
 
         logger.info("Batch iteration processing block finalized.")
 
