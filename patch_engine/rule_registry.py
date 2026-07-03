@@ -1,95 +1,39 @@
-from patch_engine.rule_fixers import (
-    fix_e722,
-    fix_f401,
-    fix_f811,
-    fix_e402,
-    fix_w291,
-    fix_w293,
-    fix_e303,
-    fix_b307,
-    # fix_b110,  # Removed temporarily until fully implemented
-    fix_b105,
-    fix_no_eval,
-)
+from patch_engine.plugin_loader import load_plugins
 
-RULES = {
+# ==============================================================================
+# Legacy Manual Registrations
+# ==============================================================================
+# Kept empty as all core rules have been fully migrated to the plugin architecture.
+# New rules should be implemented as plugins rather than added here.
+MANUAL_RULES = {}
 
-    # ==========================================
-    # Ruff
-    # ==========================================
 
-    "E722": {
-        "type": "block",
-        "fixer": fix_e722,
-        "description": "Replace bare except",
-    },
+# ==============================================================================
+# Dynamic Rule Aggregation Layer
+# ==============================================================================
 
-    "F401": {
-        "type": "block",
-        "fixer": fix_f401,
-        "description": "Remove unused import",
-    },
+def _initialize_rules() -> dict:
+    """
+    Assembles the master RULES dictionary by merging manual definitions with 
+    dynamically discovered plugins. Plugins supersede manual definitions.
+    """
+    # 1. Initialize with a shallow copy of the manual configurations (currently empty)
+    aggregated_rules = dict(MANUAL_RULES)
+    
+    # 2. Discover and evaluate runtime plugins
+    discovered_plugins = load_plugins()
+    
+    # 3. Layer plugins over manual configurations to build the final registry
+    for plugin in discovered_plugins:
+        aggregated_rules[plugin.rule_id] = {
+            "type": plugin.rule_type,
+            "fixer": plugin.fixer,
+            "description": plugin.description,
+        }
+        
+    return aggregated_rules
 
-    "F811": {
-        "type": "block",
-        "fixer": fix_f811,
-        "description": "Remove duplicate import",
-    },
 
-    "E402": {
-        "type": "file",
-        "fixer": fix_e402,
-        "description": "Move imports to top",
-    },
-
-    "W291": {
-        "type": "block",
-        "fixer": fix_w291,
-        "description": "Remove trailing whitespaces",
-    },
-
-    "W293": {
-        "type": "block",
-        "fixer": fix_w293,
-        "description": "Remove whitespace from blank lines",
-    },
-
-    "E303": {
-        "type": "block",
-        "fixer": fix_e303,
-        "description": "Collapse excessive blank lines",
-    },
-
-    # ==========================================
-    # Bandit
-    # ==========================================
-
-    "B307": {
-        "type": "block",
-        "fixer": fix_b307,
-        "description": "Replace eval()",
-    },
-
-    # "B110": {
-        # "type": "block",
-        # "fixer": fix_b110,
-        # "description": "Try Except Pass",
-    # },
-
-    "B105": {
-        "type": "block",
-        "fixer": fix_b105,
-        "description": "Hardcoded password",
-    },
-
-    # ==========================================
-    # Semgrep
-    # ==========================================
-
-    "no-eval": {
-        "type": "block",
-        "fixer": fix_no_eval,
-        "description": "Replace eval()",
-    },
-
-}
+# Public API consumed downstream by the pipeline.
+# Preserves schema integrity and ensures backwards compatibility.
+RULES = _initialize_rules()
