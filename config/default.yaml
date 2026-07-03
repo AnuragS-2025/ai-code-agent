@@ -31,3 +31,11 @@ rule_priorities:
   W293: 10
 
 disabled_rules: []
+
+# ==============================================================================
+# Logging Configuration
+# ==============================================================================
+logging_settings:
+  level: "DEBUG"                 # Options: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  file_path: "logs/agent.log"
+  enable_console: true           # Set to false to suppress stdout in container/CI runs

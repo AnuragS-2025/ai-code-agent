@@ -1,13 +1,19 @@
 import json
 import subprocess
 
+# Centralized logger initialization
+from utils.logger import get_logger
 
-def run_ruff(python_files):
+logger = get_logger(__name__)
+
+
+def run_ruff(python_files: list[str]) -> list[dict]:
     """
     Runs Ruff and returns parsed JSON output.
     """
 
-    print("[✓] Running Ruff...\n")
+    # Log analyzer start
+    logger.info("[✓] Running Ruff...")
 
     result = subprocess.run(
         [
@@ -22,13 +28,15 @@ def run_ruff(python_files):
         errors="replace"
     )
 
-    print("✔ Ruff analysis completed.\n")
-
-    # Ruff error handling
+    # Ruff error handling (Log analyzer failures)
     if result.returncode not in (0, 1):
-        print("❌ Ruff failed:")
-        print(result.stderr)
+        logger.error("❌ Ruff execution failed with return code %d.", result.returncode)
+        if result.stderr.strip():
+            logger.error("Ruff Stderr Context:\n%s", result.stderr)
         return []
+
+    # Log analyzer completion moved after returncode verification
+    logger.info("✔ Ruff analysis completed.")
 
     if not result.stdout.strip():
         return []
@@ -37,4 +45,7 @@ def run_ruff(python_files):
         return json.loads(result.stdout)
 
     except json.JSONDecodeError:
+        # Use logger.exception to automatically capture the JSON decode stack trace
+        logger.exception("❌ Failed to decode Ruff JSON stdout output.")
+        logger.debug("Raw unparsed stdout: %s", result.stdout)
         return []

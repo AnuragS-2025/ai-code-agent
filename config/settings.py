@@ -62,6 +62,21 @@ class AutoFixSettings:
         """Returns the local rule configuration file path for Semgrep (Default: 'semgrep_test_rule.yml')."""
         return self.analyzer_settings.get("semgrep", {}).get("config_path", "semgrep_test_rule.yml")
 
+    @property
+    def logging_level(self) -> str:
+        """Returns the threshold log level configuration (Default: 'INFO')."""
+        return self.logging_settings.get("level", "INFO")
+
+    @property
+    def logging_file(self) -> str:
+        """Returns the tracking path destination for engine logs (Default: 'logs/agent.log')."""
+        return self.logging_settings.get("file_path", "logs/agent.log")
+
+    @property
+    def console_logging_enabled(self) -> bool:
+        """Returns whether engine stdout logs are printed to standard output (Default: True)."""
+        return self.logging_settings.get("enable_console", True)
+
     # -------------------------------------------------------------------------
     # Backward Compatibility & Structural Subgroups
     # -------------------------------------------------------------------------
@@ -89,6 +104,11 @@ class AutoFixSettings:
     def disabled_rules(self) -> list:
         """Returns the list of rules excluded from automatic fixing."""
         return self._config.get("disabled_rules", [])
+
+    @property
+    def logging_settings(self) -> dict:
+        """Returns the logging configuration sub-dictionary."""
+        return self._config.get("logging_settings", {})
 
 
 # Instantiate a singleton-style instance for seamless cross-module imports

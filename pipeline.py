@@ -1,4 +1,3 @@
-# pipeline.py
 from analyzers.ruff_runner import run_ruff
 from analyzers.bandit_runner import run_bandit
 from analyzers.semgrep_runner import run_semgrep
@@ -23,6 +22,11 @@ from auto_fix_engine import generate_patch
 from patch_engine.issue_prioritizer import prioritize_issues
 from config.settings import settings
 
+# Centralized logger initialization
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
+
 # ==========================================
 # Global Configuration & Safeguards
 # ==========================================
@@ -34,7 +38,7 @@ AI_FALLBACK_RULES = {
 }
 
 
-def run_pipeline(target_files: list[str], max_iterations: int = None) -> dict:
+def run_pipeline(target_files: list[str], max_iterations: int | None = None) -> dict:
     """
     Runs the full auto-fix pipeline on a given list of target files.
     Returns a summary dictionary of the execution.
@@ -52,9 +56,10 @@ def run_pipeline(target_files: list[str], max_iterations: int = None) -> dict:
     # ==========================================
     for iteration in range(1, max_iterations + 1):
 
-        print("\n" + "=" * 60)
-        print(f"SCAN ITERATION {iteration}")
-        print("=" * 60)
+        # Enhanced visual boundaries for Scan Iterations (Issue 2)
+        logger.info("=" * 50)
+        logger.info("SCAN ITERATION %d", iteration)
+        logger.info("=" * 50)
 
         # --------------------------------------
         # Run Analyzers (Controlled via clean property toggles)
@@ -100,16 +105,20 @@ def run_pipeline(target_files: list[str], max_iterations: int = None) -> dict:
         issues = prioritize_issues(issues)
 
         if not issues:
-            print("\n✔ No remaining fixable issues.")
+            logger.info("✔ No remaining fixable issues.")
             break
 
         # Pick first issue (Now guaranteed to be the highest priority)
         issue = issues[0]
 
-        print("\n" + "=" * 60)
-        print("ISSUE FOUND")
-        print("=" * 60)
-        print(issue)
+        # Readable logs using structured formatting
+        logger.info(
+            "Issue Found | Rule=%s File=%s Line=%s",
+            issue["rule"],
+            issue["file"],
+            issue["line"],
+        )
+        logger.debug("Issue Details: %s", issue)
 
         # --------------------------------------
         # Extract precise block using updated AST Extractor
@@ -122,7 +131,7 @@ def run_pipeline(target_files: list[str], max_iterations: int = None) -> dict:
         code_block = block["code"]
 
         if not code_block.strip():
-            print(f"⚠ Could not extract block for {issue['rule']}")
+            logger.warning("⚠ Could not extract block for %s", issue["rule"])
             failed_issues.add(
                 (
                     issue["rule"],
@@ -132,10 +141,8 @@ def run_pipeline(target_files: list[str], max_iterations: int = None) -> dict:
             )
             continue
 
-        print("\n" + "=" * 60)
-        print("EXTRACTED BLOCK")
-        print("=" * 60)
-        print(code_block)
+        # Heavy code blocks shifted to DEBUG level
+        logger.debug("Extracted Block:\n%s", code_block)
         
         # --------------------------------------
         # Choose Fixer Strategy (Guard Routing)
@@ -147,8 +154,7 @@ def run_pipeline(target_files: list[str], max_iterations: int = None) -> dict:
             rule_meta = RULES[issue["rule"]]
             rule_type = rule_meta.get("type", "block")
             
-            print(f"⚡ Using built-in fixer for {issue['rule']}")
-            print(f"Rule Type : {rule_type}")
+            logger.info("⚡ Using built-in fixer for %s (Rule Type: %s)", issue["rule"], rule_type)
             
             if rule_type == "block":
                 fixed_block = rule_meta["fixer"](code_block)
@@ -157,7 +163,7 @@ def run_pipeline(target_files: list[str], max_iterations: int = None) -> dict:
 
         # AI fallback rules are evaluated only if AI features are globally activated in the settings
         elif issue["rule"] in AI_FALLBACK_RULES and settings.ai_enabled:
-            print(f"🤖 Using AI fixer for {issue['rule']}")
+            logger.info("🤖 Using AI fixer for %s", issue["rule"])
             rule_type = "block"
             fixed_block = generate_patch(
                 f"{issue['rule']}: {issue['message']}",
@@ -165,7 +171,7 @@ def run_pipeline(target_files: list[str], max_iterations: int = None) -> dict:
             )
 
         else:
-            print(f"⚠ Skipping unsupported rule: {issue['rule']}")
+            logger.warning("⚠ Skipping unsupported rule: %s", issue["rule"])
             failed_issues.add(
                 (
                     issue["rule"],
@@ -179,25 +185,18 @@ def run_pipeline(target_files: list[str], max_iterations: int = None) -> dict:
         # Validate Generated Patch (Only for block level fixes)
         # --------------------------------------
         if rule_type == "block":
-            print("\n" + "=" * 60)
-            print("GENERATED PATCH")
-            print("=" * 60)
-
             if fixed_block.strip():
-                print(fixed_block)
+                # Generated patch logs moved to DEBUG level
+                logger.debug("Generated Patch:\n%s", fixed_block)
             else:
-                print("[Code block removed]")
+                logger.debug("Generated Patch: [Code block removed]")
 
             # Validate Patch
             valid, message = validate_patch(fixed_block)
-
-            print("\n" + "=" * 60)
-            print("PATCH VALIDATION")
-            print("=" * 60)
-            print(message)
+            logger.info("Patch Validation Result: %s", message)
 
             if not valid:
-                print("❌ Validation failed.")
+                logger.error("❌ Validation failed.")
                 failed_issues.add(
                     (
                         issue["rule"],
@@ -209,7 +208,7 @@ def run_pipeline(target_files: list[str], max_iterations: int = None) -> dict:
 
             # Skip unchanged patch
             if code_block.strip() == fixed_block.strip():
-                print(f"⚠ Skipping {issue['rule']} (No changes generated)")
+                logger.warning("⚠ Skipping %s (No changes generated)", issue["rule"])
                 failed_issues.add(
                     (
                         issue["rule"],
@@ -222,7 +221,7 @@ def run_pipeline(target_files: list[str], max_iterations: int = None) -> dict:
         # --------------------------------------
         # Dispatch Logic Using Line Coordinate Ranges
         # --------------------------------------
-        print("\nApplying patch...\n")
+        logger.info("Applying patch...")
         success = False
 
         if rule_type == "block":
@@ -249,12 +248,10 @@ def run_pipeline(target_files: list[str], max_iterations: int = None) -> dict:
             cleanup_file(issue["file"])
 
             fixed_count += 1
-            print(f"✔ Fixed {issue['rule']} in {issue['file']}")
-            print("Re-running analyzers...")
-            print("-" * 60)
+            logger.info("✔ Fixed %s in %s. Re-running analyzers...", issue["rule"], issue["file"])
 
         else:
-            print(f"❌ Failed to apply patch for rule type '{rule_type}' (Check file bounds or structural state).")
+            logger.error("❌ Failed to apply patch for rule type '%s' (Check file bounds or structural state).", rule_type)
             failed_issues.add(
                 (
                     issue["rule"],
@@ -266,18 +263,18 @@ def run_pipeline(target_files: list[str], max_iterations: int = None) -> dict:
     # ==========================================
     # Summary Logs
     # ==========================================
-    print("\n" + "=" * 60)
-    print("SUMMARY")
-    print("=" * 60)
+    logger.info("=" * 50)
+    logger.info("SUMMARY")
+    logger.info("=" * 50)
 
-    print(f"Iterations Run      : {iteration}")
-    print(f"Issues Fixed        : {fixed_count}")
-    print(f"Issues Skipped      : {len(failed_issues)}")
+    logger.info("Iterations Run       : %d", iteration)
+    logger.info("Issues Fixed         : %d", fixed_count)
+    logger.info("Issues Skipped       : %d", len(failed_issues))
 
     if failed_issues:
-        print("\nSkipped / Unsupported:")
+        logger.info("Skipped / Unsupported:")
         for rule, message, file_path in sorted(failed_issues):
-            print(f"- {rule} in {file_path}: {message}")
+            logger.info("- %s in %s: %s", rule, file_path, message)
 
     return {
         "iterations": iteration,

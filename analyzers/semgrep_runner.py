@@ -1,12 +1,18 @@
 import json
 import subprocess
+from typing import AbstractSet
+
+# Centralized logger initialization
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 def run_semgrep(
-    project_path,
-    exclude_dirs,
-    config="auto"
-):
+    project_path: str,
+    exclude_dirs: AbstractSet[str],
+    config: str = "auto"
+) -> dict:
     """
     Runs Semgrep and returns parsed JSON output.
 
@@ -16,7 +22,8 @@ def run_semgrep(
         config: Semgrep configuration (default: auto)
     """
 
-    print("[✓] Running Semgrep...\n")
+    # Log analyzer start
+    logger.info("[✓] Running Semgrep...")
 
     command = [
         "semgrep",
@@ -37,11 +44,19 @@ def run_semgrep(
         errors="replace"
     )
 
-    print("✔ Semgrep analysis completed.\n")
+    # Fixed Bug: Strict process-level failure checking & early exit
+    if result.returncode not in (0, 1):
+        logger.error("❌ Semgrep execution failed with return code %d.", result.returncode)
+        if result.stderr.strip():
+            logger.error("Semgrep Stderr Context:\n%s", result.stderr)
+        return {}
 
-    # Print Semgrep warnings/errors if any
+    # Log analyzer completion (Executes ONLY on successful runs)
+    logger.info("✔ Semgrep analysis completed.")
+
+    # Semgrep occasionally prints operational/deprecation warnings on stderr even during successful scans
     if result.stderr.strip():
-        print(result.stderr)
+        logger.warning("Semgrep Operational Warnings:\n%s", result.stderr)
 
     if not result.stdout.strip():
         return {}
@@ -50,7 +65,9 @@ def run_semgrep(
         return json.loads(result.stdout)
 
     except json.JSONDecodeError:
-        print("❌ Failed to parse Semgrep JSON output.")
+        # Use logger.exception to automatically capture the full JSON decode stack trace
+        logger.exception("❌ Failed to parse Semgrep JSON output.")
+        logger.debug("Raw unparsed stdout: %s", result.stdout)
         return {}
 
 
@@ -59,11 +76,13 @@ def run_semgrep(
 # ==========================================
 
 if __name__ == "__main__":
-
+    # Internal test execution block logger integration
+    logger.info("Running local isolated runner test...")
+    
     findings = run_semgrep(
         "app.py",
         set(),
         config="semgrep_test_rule.yml"
     )
 
-    print(json.dumps(findings, indent=4))
+    logger.debug("Test Execution Findings Output:\n%s", json.dumps(findings, indent=4))
