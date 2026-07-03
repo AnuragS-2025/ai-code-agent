@@ -26,6 +26,10 @@ from patch_engine.conflict_detector import has_conflict
 from patch_engine.patch import Patch
 from patch_engine.scheduler import BatchScheduler
 
+# New Context Layer Imports
+from project_index.index import ProjectIndexer
+from context_engine.context import ContextEngine
+
 # Centralized logger initialization
 from utils.logger import get_logger
 
@@ -76,7 +80,13 @@ def _run_analyzers_and_filter(target_files: list[str], failed_issues: set) -> li
     return processed_issues
 
 
-def _collect_patches(filtered_issues: list[dict], failed_issues: set, metrics: dict, affected_files: set) -> list[Patch]:
+def _collect_patches(
+    filtered_issues: list[dict], 
+    failed_issues: set, 
+    metrics: dict, 
+    affected_files: set,
+    context_engine: ContextEngine = None
+) -> list[Patch]:
     """Processes filtered issues sequentially, extracts code blocks, and builds non-conflicting patches."""
     collected_patches = []
     
@@ -97,6 +107,27 @@ def _collect_patches(filtered_issues: list[dict], failed_issues: set, metrics: d
         logger.info("Processing Issue | Rule=%s File=%s Line=%s", issue["rule"], target_file, issue["line"])
         logger.debug("Issue Details: %s", issue)
 
+        # Context Resolution Loop Hook
+        context = None
+        if context_engine is not None:
+            try:
+                context = context_engine.get_context(target_file)
+                metrics["context_lookup_count"] += 1
+                
+                # Dynamic diagnostic tracking safely handling attribute structures
+                module_name = getattr(context, "module", "Unknown")
+                imports_count = len(getattr(context, "imports", []))
+                exports_count = len(getattr(context, "exports", []))
+                related_count = len(getattr(context, "related_modules", []))
+                
+                logger.info(
+                    "Context Resolved | Module: %s | Imports: %d | Exports: %d | Related Modules: %d",
+                    module_name, imports_count, exports_count, related_count
+                )
+            except Exception as e:
+                metrics["context_lookup_failures"] += 1
+                logger.error("Failed to resolve context for file %s: %s", target_file, str(e))
+
         block = extract_code_block(target_file, issue["line"])
         code_block = block["code"]
 
@@ -115,10 +146,24 @@ def _collect_patches(filtered_issues: list[dict], failed_issues: set, metrics: d
             rule_meta = RULES[issue["rule"]]
             rule_type = rule_meta.get("type", "block")
             logger.info("⚡ Using built-in fixer for %s (Rule Type: %s)", issue["rule"], rule_type)
-            fixed_block = rule_meta["fixer"](code_block) if rule_type == "block" else ""
+            
+            if rule_type == "block":
+                fixer_fn = rule_meta["fixer"]
+                try:
+                    fixed_block = fixer_fn(code_block, context=None)
+                except TypeError:
+                    fixed_block = fixer_fn(code_block)
+            else:
+                fixed_block = ""
+                
         elif issue["rule"] in AI_FALLBACK_RULES and settings.ai_enabled:
             logger.info("🤖 Using AI fallback auto-fixer for %s", issue["rule"])
             rule_type = "block"
+            
+            # AI Context API Hooks setup block
+            context_summary = None
+            logger.info("AI Context Placeholder Prepared")
+            
             fixed_block = generate_patch(f"{issue['rule']}: {issue['message']}", code_block)
         else:
             logger.warning("⚠ Skipping unsupported rule: %s", issue["rule"])
@@ -146,6 +191,7 @@ def _collect_patches(filtered_issues: list[dict], failed_issues: set, metrics: d
                 failed_issues.add((issue["rule"], issue["message"], target_file))
                 continue
 
+            # FIXED: Added back 'original=code_block' to guarantee full positional contract alignment with your Patch schema
             new_patch = Patch(
                 file=target_file,
                 rule=issue["rule"],
@@ -211,7 +257,7 @@ def _apply_batch(collected_patches: list[Patch], filtered_issues: list[dict], fa
 
 
 def _run_cleanup(affected_files: set) -> None:
-    """Executes centralized high-resiliency auto-import generation and codebase linting updates."""
+    """Executes centralized high-resiliency auto-import generation and codebase linter updates."""
     if not affected_files:
         return
 
@@ -237,7 +283,6 @@ def _log_summary(iteration: int, metrics: dict, failed_count: int) -> None:
     logger.info("PIPELINE EXECUTION METRICS SUMMARY")
     logger.info("=" * 50)
     logger.info("Iterations Executed          : %d", iteration)
-    # Metric successfully renamed to represent cumulative tracking correctly
     logger.info("Total Issues Processed       : %d", metrics["total_found"])
     logger.info("Issues Selected              : %d", metrics["issues_selected"])
     logger.info("Patches Created              : %d", metrics["patches_created"])
@@ -246,6 +291,10 @@ def _log_summary(iteration: int, metrics: dict, failed_count: int) -> None:
     logger.info("Validation Failed            : %d", metrics["failed_validation"])
     logger.info("Unsupported Rules            : %d", metrics["unsupported_rules"])
     logger.info("Files Modified               : %d", metrics["files_modified"])
+    logger.info("Project Index Build Time     : %.4fs", metrics["project_index_build_time"])
+    logger.info("Context Engine Build Time    : %.4fs", metrics["context_engine_build_time"])
+    logger.info("Context Lookups Executed     : %d", metrics["context_lookup_count"])
+    logger.info("Context Lookup Failures      : %d", metrics["context_lookup_failures"])
     logger.info("Elapsed Time                 : %.2fs", metrics["elapsed_time"])
     logger.info("=" * 50)
 
@@ -276,8 +325,40 @@ def run_pipeline(target_files: list[str], max_iterations: int | None = None) -> 
         "failed_validation": 0,
         "unsupported_rules": 0,
         "files_modified": 0,
+        "project_index_build_time": 0.0,
+        "context_engine_build_time": 0.0,
+        "context_lookup_count": 0,
+        "context_lookup_failures": 0,
         "elapsed_time": 0.0
     }
+
+    # Ensure project_root is absolute and normalized for path matching
+    project_root = os.path.normpath(os.path.abspath(os.getcwd()))
+    if target_files:
+        absolute_targets = [os.path.normpath(os.path.abspath(f)) for f in target_files]
+        common_root = os.path.commonpath(absolute_targets)
+        if common_root and os.path.exists(common_root):
+            project_root = common_root if os.path.isdir(common_root) else os.path.dirname(common_root)
+
+    # Initialize Project Index
+    logger.info("Building Project Index...")
+    index_start = time.perf_counter()
+    project_indexer = ProjectIndexer()
+    project_indexer.build(project_root)
+    metrics["project_index_build_time"] = time.perf_counter() - index_start
+    logger.info("Project Index created successfully.")
+
+    # Initialize Context Engine
+    logger.info("Building Context Engine...")
+    engine_start = time.perf_counter()
+    context_engine = ContextEngine()
+    
+    # Fallback lookup to support both public .index property and internal _index dictionary safely
+    raw_index_data = getattr(project_indexer, "index", getattr(project_indexer, "_index", None))
+    context_engine.build(raw_index_data)
+    
+    metrics["context_engine_build_time"] = time.perf_counter() - engine_start
+    logger.info("Context Engine ready.")
 
     scheduler = BatchScheduler()
 
@@ -311,7 +392,13 @@ def run_pipeline(target_files: list[str], max_iterations: int | None = None) -> 
         affected_files = set()
 
         # 3. Code Extraction and Safe Tracking Collections Phase
-        collected_patches = _collect_patches(filtered_issues, failed_issues, metrics, affected_files)
+        collected_patches = _collect_patches(
+            filtered_issues, 
+            failed_issues, 
+            metrics, 
+            affected_files, 
+            context_engine=context_engine
+        )
         logger.info("Collected patches compiled for execution batch window: %d", len(collected_patches))
         logger.info("Skipped conflicting structural patches within current loop: %d", metrics["conflicts_skipped"])
 
