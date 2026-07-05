@@ -2,8 +2,6 @@ import unittest
 import tempfile
 import shutil
 import os
-from pathlib import Path
-from test_generator.models import GeneratedTest
 from test_generator.manager import TestGenerationManager
 from test_generator.templates import (
     render_module_header,

@@ -39,7 +39,7 @@ for filename in os.listdir(folder):
 
         try:
             collection.delete(ids=[filename])
-        except:
+        except Exception:
             pass
 
         collection.add(

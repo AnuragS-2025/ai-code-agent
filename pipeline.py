@@ -161,7 +161,6 @@ def _collect_patches(
             rule_type = "block"
             
             # AI Context API Hooks setup block
-            context_summary = None
             logger.info("AI Context Placeholder Prepared")
             
             fixed_block = generate_patch(f"{issue['rule']}: {issue['message']}", code_block)

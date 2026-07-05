@@ -36,10 +36,10 @@ def render_class_skeleton(class_name: str, methods: list[str], module_name: str)
     
     if not methods:
         lines.append(
-            f'    def test_instantiation(self):\n'
-            f'        """Ensure the class can be safely instantiated."""\n'
-            f'        # TODO: Implement instantiation verify checks\n'
-            f'        assert True\n'
+            '    def test_instantiation(self):\n'
+            '        """Ensure the class can be safely instantiated."""\n'
+            '        # TODO: Implement instantiation verify checks\n'
+            '        assert True\n'
         )
     else:
         for method in methods:
