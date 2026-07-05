@@ -27,6 +27,7 @@ from context_engine.context import ContextEngine
 # Sprint 4.2 – Test Generation Subsystem Integration Imports
 from test_generator.adapter import adapt_module_info
 from test_generator.manager import TestGenerationManager
+
 # Telemetry System Import with static typing safety
 if TYPE_CHECKING:
     from feedback.manager import FeedbackManager
@@ -35,15 +36,18 @@ else:
         from feedback.manager import FeedbackManager
     except ImportError:
         FeedbackManager = None
+
 # Centralized logger initialization
 from utils.logger import get_logger
 logger = get_logger(__name__)
+
 # ==========================================
 # Global Configuration & Safeguards
 # ==========================================
 AI_FALLBACK_RULES = {
     # Future AI-only rules
 }
+
 # ==========================================
 # Telemetry Integration Wrappers
 # ==========================================
@@ -75,6 +79,7 @@ def _record_feedback_safe(
             )
     except Exception as e:
         logger.warning("Telemetry Failure | Isolated error recording feedback engine metrics: %s", str(e))
+
 # ==========================================
 # Modular Lifecycle Helpers
 # ==========================================
@@ -107,6 +112,7 @@ def _run_analyzers_and_filter(target_files: list[str], failed_issues: set) -> li
             processed_issues.append(issue)
 
     return processed_issues
+
 def _collect_patches(
     filtered_issues: list[dict],
     failed_issues: set,
@@ -134,6 +140,7 @@ def _collect_patches(
             continue
         logger.info("Processing Issue | Rule=%s File=%s Line=%s", issue["rule"], target_file, issue["line"])
         logger.debug("Issue Details: %s", issue)
+        
         # Context Resolution Loop Hook
         context = None
         if context_engine is not None:
@@ -154,6 +161,7 @@ def _collect_patches(
             except Exception as e:
                 metrics["context_lookup_failures"] += 1
                 logger.error("Failed to resolve context for file %s: %s", target_file, str(e))
+                
         block = extract_code_block(target_file, issue["line"])
         code_block = block["code"]
         if not code_block.strip():
@@ -165,21 +173,38 @@ def _collect_patches(
             continue
         logger.debug("Extracted Block:\n%s", code_block)
 
-        rule_meta = None
-        rule_type = "block"
-        if issue["rule"] in RULES:
-            rule_meta = RULES[issue["rule"]]
-            rule_type = rule_meta.get("type", "block")
-            logger.info(" ⚡  Using built-in fixer for %s (Rule Type: %s)", issue["rule"], rule_type)
+        # FIXED: .get() call added to avoid crash on explicit None rules like B404
+        rule_meta = RULES.get(issue["rule"])
+
+        if not rule_meta:
+            logger.warning(
+                "⚠ Skipping unsupported rule: %s",
+                issue["rule"],
+            )
+            metrics["unsupported_rules"] += 1
+            failed_issues.add(
+                (
+                    issue["rule"],
+                    issue["message"],
+                    target_file,
+                )
+            )
+            continue
+
+        rule_type = rule_meta.get("type", "block")
+        logger.info(
+            "⚡ Using built-in fixer for %s (Rule Type: %s)",
+            issue["rule"],
+            rule_type,
+        )
 
         if rule_type == "block":
             fixer_fn = rule_meta["fixer"]
+            # FIXED: Removed 'else' block that was mistakenly wiping out fixed_block content
             try:
                 fixed_block = fixer_fn(code_block, context=None)
             except TypeError:
                 fixed_block = fixer_fn(code_block)
-            else:
-                fixed_block = ""
 
         elif issue["rule"] in AI_FALLBACK_RULES and settings.ai_enabled:
             logger.info(" 🤖  Using AI fallback auto-fixer for %s", issue["rule"])
@@ -195,6 +220,7 @@ def _collect_patches(
             failed_issues.add((issue["rule"], issue["message"], target_file))
             metrics["unsupported_rules"] += 1
             continue
+            
         if rule_type == "block":
             if fixed_block.strip():
                 logger.debug("Generated Patch Payload:\n%s", fixed_block)
@@ -253,6 +279,7 @@ def _collect_patches(
                 failed_issues.add((issue["rule"], issue["message"], target_file))
                 _record_feedback_safe(feedback_manager, issue["rule"], target_file, iteration, False, f"File-level patch application crashed: {str(e)}")
     return collected_patches
+
 def _apply_batch(
     collected_patches: list[Patch],
     filtered_issues: list[dict],
@@ -317,6 +344,7 @@ def _apply_batch(
                 if issue["rule"] == patch.rule and issue["file"] == patch.file:
                     failed_issues.add((issue["rule"], issue["message"], issue["file"]))
     logger.info("<<< [END] Batch Application Phase")
+
 def _run_cleanup(affected_files: set) -> None:
     """Executes centralized high-resiliency auto-import generation and codebase linter updates."""
     if not affected_files:
@@ -334,6 +362,7 @@ def _run_cleanup(affected_files: set) -> None:
         except Exception:
             logger.exception(" ❌  Crash isolated running post-fix pipeline cleanup hooks on %s", affected_file)
     logger.info("<<< [END] Single-Pass Post-Fix File Cleanup Loop")
+
 def _log_summary(iteration: int, metrics: dict, failed_count: int) -> None:
     """Prints a clear summary matrix inside system streams."""
     logger.info("=" * 50)
@@ -354,6 +383,7 @@ def _log_summary(iteration: int, metrics: dict, failed_count: int) -> None:
     logger.info("Context Lookup Failures      : %d", metrics["context_lookup_failures"])
     logger.info("Elapsed Time                 : %.2fs", metrics["elapsed_time"])
     logger.info("=" * 50)
+
 # ==========================================
 # Main Execution Entry Pipeline
 # ==========================================
