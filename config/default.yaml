@@ -2,7 +2,7 @@
 # Central configuration file for the auto-fix engine
 
 ai_settings:
-  enable_ai: false
+  enable_ai: true
 
 pipeline_settings:
   max_iterations: 20
