@@ -4,8 +4,8 @@ Defines base routing structures, health-check diagnostics, and project analysis 
 """
 
 from fastapi import APIRouter
-from api.models import ScanRequest, ScanResponse, FixRequest, FixResponse, ReportResponse
-from api.services import scan_project, fix_project, generate_report
+from api.models import ScanRequest, ScanResponse, FixRequest, FixResponse, ReportResponse, JobResponse, JobStatus
+from api.services import scan_project, fix_project, generate_report, start_fix_job, get_job
 
 # Initialize the central API router context
 router = APIRouter()
@@ -68,3 +68,38 @@ async def report(project_path: str) -> ReportResponse:
         ReportResponse: Consolidated analytics overview breaking down rules and tools usage.
     """
     return generate_report(project_path)
+
+
+@router.post("/jobs/fix", response_model=JobResponse)
+async def create_fix_job(request: FixRequest) -> JobResponse:
+    """Initialize and dispatch a non-blocking background task to handle project automated corrections.
+
+    Args:
+        request (FixRequest): Input structural target path wrapper container payload.
+
+    Returns:
+        JobResponse: Initial tracking container payload documenting the newly queued task status.
+    """
+    return start_fix_job(request.project_path)
+
+
+@router.get("/jobs/{job_id}", response_model=JobResponse)
+async def job_status(job_id: str) -> JobResponse:
+    """Fetch the active execution status lifecycle frame of an asynchronous background job.
+
+    Args:
+        job_id (str): The unique string identifier assigned to the target worker task.
+
+    Returns:
+        JobResponse: Current execution tracking context payload snapshot of the requested job.
+    """
+    job = get_job(job_id)
+
+    if job is None:
+        return JobResponse(
+            job_id=job_id,
+            status=JobStatus.FAILED,
+            message="Job not found."
+        )
+
+    return job

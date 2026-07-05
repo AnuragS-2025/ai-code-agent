@@ -4,6 +4,7 @@ This module defines the validation structures for incoming scan requests
 and outgoing issue report frames.
 """
 
+from enum import Enum
 from pydantic import BaseModel, Field
 
 
@@ -73,3 +74,20 @@ class ReportResponse(BaseModel):
     total_issues: int = Field(..., description="The overall grand total sum of deduplicated issues discovered")
     by_tool: ToolSummary = Field(..., description="Aggregated overview structural split grouped by individual tool metrics")
     by_rule: dict[str, int] = Field(..., description="Key-value mapping correlating unique rule identification tags to their density occurrences")
+
+
+class JobStatus(str, Enum):
+    """Enumeration representing the execution state lifecycle transitions of an asynchronous background job."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class JobResponse(BaseModel):
+    """Schema representing tracking context metadata state tracking frameworks for automated execution tasks."""
+
+    job_id: str = Field(..., description="The unique identification cryptographic token tracking string for the worker task")
+    status: JobStatus = Field(..., description="The active discrete execution state flag indicating job progress context")
+    message: str = Field(..., description="The diagnostic textual string reporting details about the active processing state")

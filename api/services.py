@@ -5,7 +5,17 @@ static diagnostic scanners with deduplication, performance optimization, and err
 """
 
 import os
-from api.models import ScanResponse, IssueModel, FixResponse, ReportResponse, ToolSummary
+import threading
+import uuid
+from api.models import (
+    ScanResponse,
+    IssueModel,
+    FixResponse,
+    ReportResponse,
+    ToolSummary,
+    JobResponse,
+    JobStatus,
+)
 from analyzers.ruff_runner import run_ruff
 from analyzers.bandit_runner import run_bandit
 from analyzers.semgrep_runner import run_semgrep
@@ -17,6 +27,9 @@ from utils.logger import get_logger
 from pipeline import run_pipeline
 
 logger = get_logger(__name__)
+
+# Module-level tracking ledger for in-memory background job management
+jobs: dict[str, JobResponse] = {}
 
 
 def scan_project(project_path: str) -> ScanResponse:
@@ -218,3 +231,73 @@ def generate_report(project_path: str) -> ReportResponse:
         by_tool=ToolSummary(ruff=ruff_count, bandit=bandit_count, semgrep=semgrep_count),
         by_rule=by_rule,
     )
+
+
+def _run_fix_job(job_id: str, project_path: str) -> None:
+    """Execute the automated correction pipeline on a detached worker background thread.
+
+    Mutates state ledger responses across RUNNING, COMPLETED, or FAILED execution life cycles.
+
+    Args:
+        job_id (str): The unique transaction tracking identifier.
+        project_path (str): The targeted workspace folder filesystem location route.
+    """
+    jobs[job_id].status = JobStatus.RUNNING
+    jobs[job_id].message = "Job is currently executing."
+
+    try:
+        fix_result = fix_project(project_path)
+        
+        if fix_result.success:
+            jobs[job_id].status = JobStatus.COMPLETED
+            jobs[job_id].message = "Auto-fix completed successfully."
+        else:
+            jobs[job_id].status = JobStatus.FAILED
+            jobs[job_id].message = fix_result.message
+
+    except Exception as exc:
+        logger.exception("Async background fix job handling caught an unhandled exception for job %s", job_id)
+        jobs[job_id].status = JobStatus.FAILED
+        jobs[job_id].message = str(exc)
+
+
+def start_fix_job(project_path: str) -> JobResponse:
+    """Initialize and spawn an asynchronous background processing execution thread.
+
+    Generates distinct cryptographic tokens, builds a tracker wrapper state, and schedules workers.
+
+    Args:
+        project_path (str): Path targeting directory structures or individual modules.
+
+    Returns:
+        JobResponse: Initial tracking container payload context tracking active task state.
+    """
+    job_id = str(uuid.uuid4())
+    
+    response = JobResponse(
+        job_id=job_id,
+        status=JobStatus.PENDING,
+        message="Job queued."
+    )
+    
+    jobs[job_id] = response
+
+    threading.Thread(
+        target=_run_fix_job,
+        args=(job_id, project_path),
+        daemon=True,
+    ).start()
+
+    return response
+
+
+def get_job(job_id: str) -> JobResponse | None:
+    """Retrieve an active or archived in-memory worker context representation frame.
+
+    Args:
+        job_id (str): The unique transaction tracking identifier token.
+
+    Returns:
+        JobResponse | None: The matching job snapshot profile tracking container or None.
+    """
+    return jobs.get(job_id)
