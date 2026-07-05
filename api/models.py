@@ -56,3 +56,20 @@ class FixResponse(BaseModel):
     issues_fixed: int = Field(
         0, description="The total count of individual structural diagnostic findings resolved"
     )
+
+
+class ToolSummary(BaseModel):
+    """Schema representing compiled metrics partitioned across individual analyzer backends."""
+
+    ruff: int = Field(..., description="Total count of unique analysis findings flagged by Ruff")
+    bandit: int = Field(..., description="Total count of unique analysis findings flagged by Bandit")
+    semgrep: int = Field(..., description="Total count of unique analysis findings flagged by Semgrep")
+
+
+class ReportResponse(BaseModel):
+    """Schema representing the unified analytics summary payload framework for analytical profiling."""
+
+    success: bool = Field(..., description="Execution diagnostic state flag")
+    total_issues: int = Field(..., description="The overall grand total sum of deduplicated issues discovered")
+    by_tool: ToolSummary = Field(..., description="Aggregated overview structural split grouped by individual tool metrics")
+    by_rule: dict[str, int] = Field(..., description="Key-value mapping correlating unique rule identification tags to their density occurrences")

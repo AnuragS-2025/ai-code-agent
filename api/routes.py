@@ -4,8 +4,8 @@ Defines base routing structures, health-check diagnostics, and project analysis 
 """
 
 from fastapi import APIRouter
-from api.models import ScanRequest, ScanResponse, FixRequest, FixResponse
-from api.services import scan_project, fix_project
+from api.models import ScanRequest, ScanResponse, FixRequest, FixResponse, ReportResponse
+from api.services import scan_project, fix_project, generate_report
 
 # Initialize the central API router context
 router = APIRouter()
@@ -55,3 +55,16 @@ async def fix(request: FixRequest) -> FixResponse:
         FixResponse: Compiled structural report summarizing applied automation statistics.
     """
     return fix_project(request.project_path)
+
+
+@router.get("/report", response_model=ReportResponse)
+async def report(project_path: str) -> ReportResponse:
+    """Analyze a targeted workspace to compute and compile density metric analytical reports.
+
+    Args:
+        project_path (str): The local filesystem query string location to be evaluated.
+
+    Returns:
+        ReportResponse: Consolidated analytics overview breaking down rules and tools usage.
+    """
+    return generate_report(project_path)
