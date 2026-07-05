@@ -1,5 +1,6 @@
 import os
 import time
+import textwrap
 from typing import Optional, TYPE_CHECKING
 from analyzers.ruff_runner import run_ruff
 from analyzers.bandit_runner import run_bandit
@@ -12,7 +13,7 @@ from patch_engine.replacer import replace_code_block
 from patch_engine.import_manager import update_imports
 from patch_engine.file_fixers import cleanup_file
 from patch_engine.rule_registry import RULES
-from auto_fix_engine import generate_patch
+from llm import LLMManager
 # Phase 3 Intelligence Layer Imports
 from config.settings import settings
 from patch_engine.issue_prioritizer import prioritize_issues
@@ -122,7 +123,8 @@ def _collect_patches(
     iteration: int,
     feedback_manager: Optional["FeedbackManager"] = None,
     context_engine: ContextEngine = None,
-    validation_manager: ValidationManager = None
+    validation_manager: ValidationManager = None,
+    llm_manager: LLMManager = None
 ) -> list[Patch]:
     """Processes filtered issues sequentially, extracts code blocks, and builds non-conflicting patches."""
     collected_patches = []
@@ -175,134 +177,155 @@ def _collect_patches(
             continue
         logger.debug("Extracted Block:\n%s", code_block)
 
-        # FIXED: .get() call added to avoid crash on explicit None rules like B404
         rule_meta = RULES.get(issue["rule"])
+        fixed_block = None
+        use_llm_fallback = False
 
-        if not rule_meta:
-            logger.warning(
-                "⚠ Skipping unsupported rule: %s",
-                issue["rule"],
-            )
-            metrics["unsupported_rules"] += 1
-            failed_issues.add(
-                (
-                    issue["rule"],
-                    issue["message"],
-                    target_file,
-                )
-            )
-            continue
-
-        rule_type = rule_meta.get("type", "block")
-        logger.info(
-            "⚡ Using built-in fixer for %s (Rule Type: %s)",
-            issue["rule"],
-            rule_type,
-        )
-
-        if rule_type == "block":
-            fixer_fn = rule_meta["fixer"]
-            # FIXED: Removed 'else' block that was mistakenly wiping out fixed_block content
-            try:
-                fixed_block = fixer_fn(code_block, context=None)
-            except TypeError:
-                fixed_block = fixer_fn(code_block)
-
-        elif issue["rule"] in AI_FALLBACK_RULES and settings.ai_enabled:
-            logger.info(" 🤖  Using AI fallback auto-fixer for %s", issue["rule"])
-            rule_type = "block"
-
-            # AI Context API Hooks setup block
-            logger.info("AI Context Placeholder Prepared")
-
-            fixed_block = generate_patch(f"{issue['rule']}: {issue['message']}", code_block)
-        else:
-            # Do not record feedback telemetry for completely unsupported rules as per constraints
-            logger.warning(" ⚠  Skipping unsupported rule: %s", issue["rule"])
-            failed_issues.add((issue["rule"], issue["message"], target_file))
-            metrics["unsupported_rules"] += 1
-            continue
+        # Phase 1: Try Built-in Rule Engine (if available)
+        if rule_meta:
+            rule_type = rule_meta.get("type", "block")
+            if rule_type == "block":
+                logger.info("⚡ Using built-in fixer for %s", issue["rule"])
+                fixer_fn = rule_meta["fixer"]
+                try:
+                    fixed_block = fixer_fn(code_block, context=None)
+                except TypeError:
+                    try:
+                        fixed_block = fixer_fn(code_block)
+                    except Exception as e:
+                        logger.warning("Built-in fixer crashed for rule %s, dropping to LLM fallback: %s", issue["rule"], str(e))
+                        use_llm_fallback = True
+                except Exception as e:
+                    logger.warning("Built-in fixer failed context parsing for rule %s, dropping to LLM fallback: %s", issue["rule"], str(e))
+                    use_llm_fallback = True
             
-        if rule_type == "block":
-            if fixed_block.strip():
-                logger.debug("Generated Patch Payload:\n%s", fixed_block)
-            else:
-                logger.debug("Generated Patch Payload: [Block removed]")
-
-            # Validation manager integration step
-            if validation_manager is not None:
-                report = validation_manager.validate_patch(
-                    source_code=fixed_block,
-                    file_path=target_file,
-                    run_ruff=True,
-                )
-                if not report.success:
-                    failed_stage = report.failed_stage()
-                    
-                    # Optimized direct property execution for higher readability
-                    if failed_stage is not None:
-                        logger.warning("Validation failed during %s: %s", failed_stage.name, failed_stage.message)
-                        failure_message = f"Validation failed during {failed_stage.name}: {failed_stage.message}"
-                    else:
-                        logger.warning("Validation failed.")
-                        failure_message = "Validation failed."
-                    
-                    failed_issues.add((issue["rule"], issue["message"], target_file))
-                    metrics["failed_validation"] += 1
-                    _record_feedback_safe(
-                        feedback_manager, 
-                        issue["rule"], 
-                        target_file, 
-                        iteration, 
-                        False, 
-                        failure_message
-                    )
+            elif rule_type == "file":
+                logger.info("Executing immediate file-level rule logic: %s", issue["rule"])
+                try:
+                    rule_meta["fixer"](target_file)
+                    affected_files.add(target_file)
+                    files_touched_this_iteration.add(target_file)
+                    metrics["patches_applied"] += 1
+                    _record_feedback_safe(feedback_manager, issue["rule"], target_file, iteration, True, "File-level patch applied successfully.")
                     continue
+                except Exception as e:
+                    logger.warning("File-level built-in fixer failed for rule %s, dropping to LLM fallback: %s", issue["rule"], str(e))
+                    use_llm_fallback = True
+        else:
+            # FIX: Explicit routing logic block for unsupported/unknown rules
+            if settings.ai_enabled:
+                logger.info("🤖 Using LLM fallback for unsupported rule %s", issue["rule"])
+                use_llm_fallback = True
+            else:
+                logger.warning(" ⚠  Skipping unsupported or unresolvable rule: %s (AI Fallback is disabled)", issue["rule"])
+                failed_issues.add((issue["rule"], issue["message"], target_file))
+                metrics["unsupported_rules"] += 1
+                continue
+
+        # Phase 2: AI Fallback Engine Trigger
+        if (use_llm_fallback or fixed_block is None) and settings.ai_enabled:
+            logger.info(" 🤖  Using AI fallback auto-fixer for %s", issue["rule"])
             
-            if code_block.strip() == fixed_block.strip():
-                msg = "Skipping rule execution (No operational delta generated by fixer)."
-                logger.warning(" ⚠  %s: %s", msg, issue["rule"])
+            # Context normalization step to guard against serialization mismatch issues
+            normalized_context = str(context) if context is not None else None
+
+            fixed_block = llm_manager.generate_patch(
+                issue=issue,
+                code_block=code_block,
+                context=normalized_context,
+            )
+            
+            if fixed_block is None:
+                msg = f"AI Fallback failed to generate a patch payload for rule {issue['rule']}"
+                logger.error(" ❌  %s in file %s", msg, target_file)
+                metrics["failed_validation"] += 1
                 failed_issues.add((issue["rule"], issue["message"], target_file))
                 _record_feedback_safe(feedback_manager, issue["rule"], target_file, iteration, False, msg)
                 continue
-            new_patch = Patch(
-                file=target_file,
-                rule=issue["rule"],
-                start=block["start"],
-                end=block["end"],
-                original=code_block,
-                replacement=fixed_block
+
+        # Ultimate fallback safety catch
+        if fixed_block is None:
+            logger.warning(" ⚠  Skipping unsupported or unresolvable rule: %s", issue["rule"])
+            failed_issues.add((issue["rule"], issue["message"], target_file))
+            metrics["unsupported_rules"] += 1
+            continue
+
+        # Phase 3: Patch Verification, Diagnostics, Conflict Check & Packing
+        if fixed_block.strip():
+            logger.debug("Generated Patch Payload:\n%s", fixed_block)
+        else:
+            logger.debug("Generated Patch Payload: [Block removed]")
+
+        # Validation manager integration step
+        if validation_manager is not None:
+            # Wrap patch code block safely inside a temporary context wrapper function
+            # This allows validating structural code segments containing 'return' or 'yield' cleanly
+            indented_payload = textwrap.indent(textwrap.dedent(fixed_block), "    ")
+            validated_code = f"def __validation_wrapper_context():\n{indented_payload}"
+            
+            report = validation_manager.validate_patch(
+                source_code=validated_code,
+                file_path=target_file,
+                run_ruff=False,  # Set to False. Let AST handle snippet syntax, file-level cleanup runs later.
             )
-            # Strict cross-reference checker
-            conflict_found = False
-            for existing_patch in collected_patches:
-                if has_conflict(existing_patch, new_patch):
-                    logger.debug(
-                        "Conflict | Rule=%s File=%s Range=%d-%d Reason=Skipped because another patch already targets the same structural region.",
-                        new_patch.rule,
-                        new_patch.file,
-                        new_patch.start,
-                        new_patch.end,
-                    )
-                    conflict_found = True
-                    break
-            if conflict_found:
-                metrics["conflicts_skipped"] += 1
-                continue
-            collected_patches.append(new_patch)
-            files_touched_this_iteration.add(target_file)
-            metrics["patches_created"] += 1
-        elif rule_type == "file" and rule_meta is not None:
-            logger.info("Executing immediate file-level rule logic: %s", issue["rule"])
-            try:
-                rule_meta["fixer"](target_file)
-                affected_files.add(target_file)
-                files_touched_this_iteration.add(target_file)
-                metrics["patches_applied"] += 1
-                _record_feedback_safe(feedback_manager, issue["rule"], target_file, iteration, True, "File-level patch applied successfully.")
-            except Exception as e:
+            if not report.success:
+                failed_stage = report.failed_stage()
+                
+                if failed_stage is not None:
+                    logger.warning("Validation failed during %s: %s", failed_stage.name, failed_stage.message)
+                    failure_message = f"Validation failed during {failed_stage.name}: {failed_stage.message}"
+                else:
+                    logger.warning("Validation failed.")
+                    failure_message = "Validation failed."
+                
                 failed_issues.add((issue["rule"], issue["message"], target_file))
-                _record_feedback_safe(feedback_manager, issue["rule"], target_file, iteration, False, f"File-level patch application crashed: {str(e)}")
+                metrics["failed_validation"] += 1
+                _record_feedback_safe(
+                    feedback_manager, 
+                    issue["rule"], 
+                    target_file, 
+                    iteration, 
+                    False, 
+                    failure_message
+                )
+                continue
+        
+        if code_block.strip() == fixed_block.strip():
+            msg = "Skipping rule execution (No operational delta generated by fixer)."
+            logger.warning(" ⚠  %s: %s", msg, issue["rule"])
+            failed_issues.add((issue["rule"], issue["message"], target_file))
+            _record_feedback_safe(feedback_manager, issue["rule"], target_file, iteration, False, msg)
+            continue
+
+        new_patch = Patch(
+            file=target_file,
+            rule=issue["rule"],
+            start=block["start"],
+            end=block["end"],
+            original=code_block,
+            replacement=fixed_block
+        )
+
+        conflict_found = False
+        for existing_patch in collected_patches:
+            if has_conflict(existing_patch, new_patch):
+                logger.debug(
+                    "Conflict | Rule=%s File=%s Range=%d-%d Reason=Skipped because another patch already targets the same structural region.",
+                    new_patch.rule,
+                    new_patch.file,
+                    new_patch.start,
+                    new_patch.end,
+                )
+                conflict_found = True
+                break
+        if conflict_found:
+            metrics["conflicts_skipped"] += 1
+            continue
+
+        collected_patches.append(new_patch)
+        files_touched_this_iteration.add(target_file)
+        metrics["patches_created"] += 1
+
     return collected_patches
 
 def _apply_batch(
@@ -385,7 +408,7 @@ def _run_cleanup(affected_files: set) -> None:
             cleanup_file(affected_file)
             logger.info(" ✔  Post-fix operations successfully executed for file: %s", affected_file)
         except Exception:
-            logger.exception(" ❌  Crash isolated running post-fix pipeline cleanup hooks on %s", affected_file)
+            logger.exception(" ❌  Crash isolated running post-fix pipeline pipeline cleanup hooks on %s", affected_file)
     logger.info("<<< [END] Single-Pass Post-Fix File Cleanup Loop")
 
 def _log_summary(iteration: int, metrics: dict, failed_count: int) -> None:
@@ -428,6 +451,9 @@ def run_pipeline(target_files: list[str], max_iterations: int | None = None) -> 
 
     # Initialize exactly one ValidationManager instance before entering processing loop
     validation_manager = ValidationManager()
+    
+    # Initialize exactly one shared LLMManager instance for the execution lifecycle
+    llm_manager = LLMManager()
     
     failed_issues = set()
     iteration = 0
@@ -504,7 +530,8 @@ def run_pipeline(target_files: list[str], max_iterations: int | None = None) -> 
             iteration=iteration,
             feedback_manager=feedback_manager,
             context_engine=context_engine,
-            validation_manager=validation_manager
+            validation_manager=validation_manager,
+            llm_manager=llm_manager
         )
         logger.info("Collected patches compiled for execution batch window: %d", len(collected_patches))
         logger.info("Skipped conflicting structural patches within current loop: %d", metrics["conflicts_skipped"])
