@@ -1,6 +1,5 @@
 import unittest
 from unittest.mock import patch, MagicMock
-from git_automation.models import GitStatus, GitOperationResult
 from git_automation.manager import GitAutomationManager
 from git_automation import git
 

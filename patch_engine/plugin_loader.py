@@ -60,12 +60,12 @@ def load_plugins() -> list[BaseRulePlugin]:
                         # 5. Initialize the plugin via its parameterless constructor
                         plugin_instance = obj_class()
                         discovered_instances.append(plugin_instance)
-                    except Exception as exc:
+                    except Exception:
                         # Fail-silent execution wrapper: prevents one buggy constructor from killing the loader
                         # TODO: Log instantiation failure using 'exc' when logging system is integrated
                         pass
                         
-        except Exception as exc:
+        except Exception:
             # Catch file-level syntax errors or missing third-party imports gracefully
             # TODO: Log import failure using 'exc' when logging system is integrated
             pass

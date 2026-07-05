@@ -32,7 +32,7 @@ for filename in os.listdir(folder):
         # Delete old entry if exists
         try:
             collection.delete(ids=[filename])
-        except:
+        except Exception:
             pass
 
         collection.add(

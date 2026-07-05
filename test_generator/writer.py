@@ -5,7 +5,6 @@ Commits generated unit testing configurations safely into disk directories while
 guaranteeing complete crash safety and safeguarding against file overwrite regressions.
 """
 
-import os
 from pathlib import Path
 from test_generator.models import GeneratedTest
 
