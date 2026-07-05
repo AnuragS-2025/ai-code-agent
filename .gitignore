@@ -1,5 +1,22 @@
+# Virtual Environment
 venv/
-__pycache__/
-*.pyc
 
+# Python Cache
+__pycache__/
+*.py[cod]
+
+# Pytest
+.pytest_cache/
+
+# Ruff
+.ruff_cache/
+
+# Feedback Database
+.feedback/
+
+# Logs
 logs/agent.log
+
+# OS Files
+.DS_Store
+Thumbs.db
