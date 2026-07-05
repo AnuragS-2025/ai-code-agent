@@ -31,3 +31,28 @@ class ScanResponse(BaseModel):
     issues: list[IssueModel] = Field(
         default_factory=list, description="Aggregated structural collection of analysis findings"
     )
+
+
+class FixRequest(BaseModel):
+    """Schema for incoming auto-fix generation requests."""
+
+    project_path: str = Field(
+        ..., description="The local filesystem route to the target project directory or file"
+    )
+
+
+class FixResponse(BaseModel):
+    """Schema representing the unified aggregation execution response after applying auto-fixes."""
+
+    success: bool = Field(
+        ..., description="Execution diagnostic state flag indicating if the process completed successfully"
+    )
+    message: str = Field(
+        ..., description="The diagnostic textual string summary of the applied automated fixes"
+    )
+    files_modified: int = Field(
+        0, description="The total quantity of distinct files rewritten during processing"
+    )
+    issues_fixed: int = Field(
+        0, description="The total count of individual structural diagnostic findings resolved"
+    )

@@ -5,7 +5,7 @@ static diagnostic scanners with deduplication, performance optimization, and err
 """
 
 import os
-from api.models import ScanResponse, IssueModel
+from api.models import ScanResponse, IssueModel, FixResponse
 from analyzers.ruff_runner import run_ruff
 from analyzers.bandit_runner import run_bandit
 from analyzers.semgrep_runner import run_semgrep
@@ -14,6 +14,7 @@ from parsers.bandit_parser import parse_bandit
 from parsers.semgrep_parser import parse_semgrep
 from config.settings import settings
 from utils.logger import get_logger
+from pipeline import run_pipeline
 
 logger = get_logger(__name__)
 
@@ -117,3 +118,53 @@ def scan_project(project_path: str) -> ScanResponse:
     except Exception as exc:
         logger.exception("Project scan failed catastrophically: %s", str(exc))
         return ScanResponse(success=False, issues=[])
+
+
+def fix_project(project_path: str) -> FixResponse:
+    """Orchestrate the automated correction pipeline for detected engine findings.
+
+    Accepts an isolated targeted filesystem coordinate path context, performs
+    existence structural assertions, and securely triggers downstream automated modification.
+
+    Args:
+        project_path (str): Path targeting directory structures or individual modules.
+
+    Returns:
+        FixResponse: Consolidated response metadata documenting applied remediation statistics.
+    """
+    # Resolve and normalize targeting coordinates safely
+    target_path = os.path.normpath(os.path.abspath(project_path))
+
+    # 1. Defensive Path Guardrail Validation
+    if not os.path.exists(target_path):
+        logger.warning("Project fix aborted | Specified path does not exist: %s", target_path)
+        return FixResponse(
+            success=False,
+            message="Specified project path does not exist.",
+            files_modified=0,
+            issues_fixed=0,
+        )
+
+    try:
+        # 2. Build Pipeline Input Targets Array Vector
+        target_files = [target_path]
+        
+        # 3. Synchronously Execute Core Transformation Automation Pipeline Layer
+        result = run_pipeline(target_files)
+        fixed = result.get("fixed", 0)
+
+        return FixResponse(
+            success=True,
+            message="Pipeline execution completed successfully.",
+            files_modified=fixed,
+            issues_fixed=fixed,
+        )
+
+    except Exception as exc:
+        logger.exception("Project auto-fix generation failed catastrophically: %s", str(exc))
+        return FixResponse(
+            success=False,
+            message="Pipeline execution failed.",
+            files_modified=0,
+            issues_fixed=0,
+        )
