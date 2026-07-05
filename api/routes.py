@@ -4,8 +4,8 @@ Defines base routing structures, health-check diagnostics, and project analysis 
 """
 
 from fastapi import APIRouter
-from api.models import ScanRequest, ScanResponse
-from api.services import scan_project
+from api.models import ScanRequest, ScanResponse, FixRequest, FixResponse
+from api.services import scan_project, fix_project
 
 # Initialize the central API router context
 router = APIRouter()
@@ -42,3 +42,16 @@ async def scan(request: ScanRequest) -> ScanResponse:
         ScanResponse: Compiled structural report listing rule findings.
     """
     return scan_project(request.project_path)
+
+
+@router.post("/fix", response_model=FixResponse)
+async def fix(request: FixRequest) -> FixResponse:
+    """Remediate static analysis engine violations found within a file-system path.
+
+    Args:
+        request (FixRequest): Input structural target path wrapper container payload.
+
+    Returns:
+        FixResponse: Compiled structural report summarizing applied automation statistics.
+    """
+    return fix_project(request.project_path)
