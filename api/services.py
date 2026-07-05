@@ -5,7 +5,7 @@ static diagnostic scanners with deduplication, performance optimization, and err
 """
 
 import os
-from api.models import ScanResponse, IssueModel, FixResponse
+from api.models import ScanResponse, IssueModel, FixResponse, ReportResponse, ToolSummary
 from analyzers.ruff_runner import run_ruff
 from analyzers.bandit_runner import run_bandit
 from analyzers.semgrep_runner import run_semgrep
@@ -168,3 +168,53 @@ def fix_project(project_path: str) -> FixResponse:
             files_modified=0,
             issues_fixed=0,
         )
+
+
+def generate_report(project_path: str) -> ReportResponse:
+    """Scan a target coordinate context path and compute statistical density metrics.
+
+    Invokes the unified structural scanner layer, builds key counts mapping rule profiles, 
+    and classifies findings across Ruff, Bandit, and Semgrep detection tooling.
+
+    Args:
+        project_path (str): Path targeting directory structures or individual modules.
+
+    Returns:
+        ReportResponse: Aggregated overview analytics framework summary payload.
+    """
+    scan_result = scan_project(project_path)
+
+    if not scan_result.success:
+        return ReportResponse(
+            success=False,
+            total_issues=0,
+            by_tool=ToolSummary(ruff=0, bandit=0, semgrep=0),
+            by_rule={},
+        )
+
+    total_issues = len(scan_result.issues)
+    by_rule: dict[str, int] = {}
+    
+    ruff_count = 0
+    bandit_count = 0
+    semgrep_count = 0
+
+    ruff_prefixes = ("E", "F", "W", "I", "UP", "N", "PL", "RUF")
+
+    for issue in scan_result.issues:
+        rule_tag = issue.rule
+        by_rule[rule_tag] = by_rule.get(rule_tag, 0) + 1
+
+        if rule_tag.startswith(ruff_prefixes):
+            ruff_count += 1
+        elif rule_tag.startswith("B"):
+            bandit_count += 1
+        else:
+            semgrep_count += 1
+
+    return ReportResponse(
+        success=True,
+        total_issues=total_issues,
+        by_tool=ToolSummary(ruff=ruff_count, bandit=bandit_count, semgrep=semgrep_count),
+        by_rule=by_rule,
+    )
