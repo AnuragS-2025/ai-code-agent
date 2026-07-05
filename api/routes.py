@@ -1,9 +1,11 @@
 """API Route definitions and endpoint handlers using FastAPI APIRouter.
 
-Defines base routing structures and health-check diagnostics.
+Defines base routing structures, health-check diagnostics, and project analysis entry vectors.
 """
 
 from fastapi import APIRouter
+from api.models import ScanRequest, ScanResponse
+from api.services import scan_project
 
 # Initialize the central API router context
 router = APIRouter()
@@ -27,3 +29,16 @@ async def get_health() -> dict[str, str]:
         dict[str, str]: A dictionary containing the operational status indicator.
     """
     return {"status": "ok"}
+
+
+@router.post("/scan", response_model=ScanResponse)
+async def scan(request: ScanRequest) -> ScanResponse:
+    """Scan an absolute file-system path structure using enabled static analysis engines.
+
+    Args:
+        request (ScanRequest): Input structural target path wrapper container payload.
+
+    Returns:
+        ScanResponse: Compiled structural report listing rule findings.
+    """
+    return scan_project(request.project_path)
