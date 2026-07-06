@@ -16,6 +16,7 @@ from api.models import (
     ExportFormat,
     ScanHistoryResponse,
     SupportedToolsResponse,
+    ConfigResponse,
 )
 from api.services import (
     scan_project,
@@ -26,6 +27,7 @@ from api.services import (
     export_report,
     get_scan_history,
     get_supported_tools,
+    get_config,
 )
 
 # Initialize the central API router context
@@ -161,3 +163,13 @@ async def tools() -> SupportedToolsResponse:
         SupportedToolsResponse: Consolidated ledger payload detailing active static analysis frameworks.
     """
     return get_supported_tools()
+
+
+@router.get("/config", response_model=ConfigResponse)
+async def config() -> ConfigResponse:
+    """Fetch active operational threshold parameters detailing global system runtime setting frames.
+
+    Returns:
+        ConfigResponse: Unified serialization blueprint capturing running pipeline environments.
+    """
+    return get_config()

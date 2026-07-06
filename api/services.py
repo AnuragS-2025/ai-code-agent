@@ -24,6 +24,7 @@ from api.models import (
     ScanHistoryResponse,
     ToolInfo,
     SupportedToolsResponse,
+    ConfigResponse,
 )
 from analyzers.ruff_runner import run_ruff
 from analyzers.bandit_runner import run_bandit
@@ -418,4 +419,21 @@ def get_supported_tools() -> SupportedToolsResponse:
                 enabled=getattr(settings, "semgrep_enabled", True),
             ),
         ],
+    )
+
+
+def get_config() -> ConfigResponse:
+    """Query the runtime configuration profile schema state to evaluate pipeline parameters.
+
+    Returns:
+        ConfigResponse: Structured environmental context detailing engine settings.
+    """
+    return ConfigResponse(
+        success=True,
+        ai_enabled=getattr(settings, "ai_enabled", True),
+        ruff_enabled=getattr(settings, "ruff_enabled", True),
+        bandit_enabled=getattr(settings, "bandit_enabled", True),
+        semgrep_enabled=getattr(settings, "semgrep_enabled", True),
+        semgrep_config_path=getattr(settings, "semgrep_config_path", "p/python"),
+        max_iterations=getattr(settings, "max_iterations", 3),
     )
