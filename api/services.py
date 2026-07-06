@@ -8,6 +8,7 @@ import csv
 from datetime import datetime
 import json
 import os
+import subprocess
 import threading
 import uuid
 from api.models import (
@@ -29,6 +30,7 @@ from api.models import (
     PreviewIssue,
     DiffLine,
     DiffResponse,
+    GitBackupResponse,
 )
 from analyzers.ruff_runner import run_ruff
 from analyzers.bandit_runner import run_bandit
@@ -564,3 +566,86 @@ def generate_diff(project_path: str) -> DiffResponse:
     except Exception as exc:
         logger.exception("Line differential generator layer encountered an unexpected exception: %s", str(exc))
         return DiffResponse(success=False, diffs=[])
+
+
+def create_git_backup(project_path: str) -> GitBackupResponse:
+    """Commit any outstanding structural workspace alterations to create a safe transactional rollback node.
+
+    Resolves the execution repository target context, verifies standard downstream repository 
+    presence frameworks, and triggers synchronized sequential Git environment tracking steps.
+
+    Args:
+        project_path (str): Path targeting a workspace repository route or specific source file.
+
+    Returns:
+        GitBackupResponse: Consolidated container frame tracking operation status and tracking metadata.
+    """
+    try:
+        # Resolve and normalize targeting coordinates safely
+        target_path = os.path.normpath(os.path.abspath(project_path))
+
+        # Resolve parent tracking directory layer if targeting a specific file instance
+        if os.path.isfile(target_path):
+            repo_dir = os.path.dirname(target_path)
+        else:
+            repo_dir = target_path
+
+        # Defensive path guardrail validation checks
+        if not os.path.exists(repo_dir) or not os.path.isdir(repo_dir):
+            return GitBackupResponse(
+                success=False,
+                message="Project is not a Git repository.",
+                commit_hash="",
+            )
+
+        # Assert repository state infrastructure marker existence
+        git_marker = os.path.join(repo_dir, ".git")
+        if not os.path.exists(git_marker):
+            return GitBackupResponse(
+                success=False,
+                message="Project is not a Git repository.",
+                commit_hash="",
+            )
+
+        # 1. Execute staging phase across all localized modifications
+        subprocess.run(
+            ["git", "add", "-A"],
+            cwd=repo_dir,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        # 2. Execute tracking snapshot transactional entry commit mapping
+        subprocess.run(
+            ["git", "commit", "-m", "Auto backup before AI fix"],
+            cwd=repo_dir,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        # 3. Resolve active tracking commit revision reference identification hash token
+        rev_result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=repo_dir,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        commit_hash = rev_result.stdout.strip()
+
+        return GitBackupResponse(
+            success=True,
+            message="Git backup created successfully.",
+            commit_hash=commit_hash,
+        )
+
+    except Exception as exc:
+        logger.exception("Git backup orchestration logic encountered an unhandled execution pipeline exception: %s", str(exc))
+        return GitBackupResponse(
+            success=False,
+            message="Git backup failed.",
+            commit_hash="",
+        )

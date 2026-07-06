@@ -180,3 +180,11 @@ class DiffResponse(BaseModel):
 
     success: bool = Field(..., description="Execution diagnostic state flag mapping operation status")
     diffs: list[DiffLine] = Field(default_factory=list, description="Aggregated collection tracking line differential modifications computed across the source scope")
+
+
+class GitBackupResponse(BaseModel):
+    """Schema representing the execution result of creating a Git backup before applying fixes."""
+
+    success: bool = Field(..., description="Execution diagnostic state flag mapping operation status")
+    message: str = Field(..., description="Diagnostic textual string summarizing the Git backup result")
+    commit_hash: str = Field(..., description="The Git commit hash generated for the created backup, if available")
