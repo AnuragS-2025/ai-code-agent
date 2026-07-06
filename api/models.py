@@ -5,6 +5,7 @@ and outgoing issue report frames.
 """
 
 from enum import Enum
+from typing import List, Dict
 from pydantic import BaseModel, Field
 
 
@@ -29,7 +30,7 @@ class ScanResponse(BaseModel):
     """Schema representing the unified aggregation response model frame."""
 
     success: bool = Field(..., description="Execution diagnostic state flag")
-    issues: list[IssueModel] = Field(
+    issues: List[IssueModel] = Field(
         default_factory=list, description="Aggregated structural collection of analysis findings"
     )
 
@@ -73,7 +74,7 @@ class ReportResponse(BaseModel):
     success: bool = Field(..., description="Execution diagnostic state flag")
     total_issues: int = Field(..., description="The overall grand total sum of deduplicated issues discovered")
     by_tool: ToolSummary = Field(..., description="Aggregated overview structural split grouped by individual tool metrics")
-    by_rule: dict[str, int] = Field(..., description="Key-value mapping correlating unique rule identification tags to their density occurrences")
+    by_rule: Dict[str, int] = Field(..., description="Key-value mapping correlating unique rule identification tags to their density occurrences")
 
 
 class JobStatus(str, Enum):
@@ -121,7 +122,7 @@ class ScanHistoryResponse(BaseModel):
     """Schema representing the compiled list aggregate context wrapping all execution timeline historical logs."""
 
     success: bool = Field(..., description="Execution diagnostic state flag mapping operation status")
-    history: list[ScanHistoryEntry] = Field(default_factory=list, description="Aggregated collection sequence profiling historical analytical diagnostic snapshots")
+    history: List[ScanHistoryEntry] = Field(default_factory=list, description="Aggregated collection sequence profiling historical analytical diagnostic snapshots")
 
 
 class ToolInfo(BaseModel):
@@ -135,7 +136,7 @@ class SupportedToolsResponse(BaseModel):
     """Schema representing the aggregate breakdown schema response capturing status arrays of all backend engines."""
 
     success: bool = Field(..., description="Execution diagnostic state flag mapping operation status")
-    tools: list[ToolInfo] = Field(default_factory=list, description="Aggregated sequence collection listing specific analyzer metadata frames")
+    tools: List[ToolInfo] = Field(default_factory=list, description="Aggregated sequence collection listing specific analyzer metadata frames")
 
 
 class ConfigResponse(BaseModel):
@@ -164,7 +165,7 @@ class FixPreviewResponse(BaseModel):
     """Schema representing the prospective summary change log tracking dry-run optimization iterations."""
 
     success: bool = Field(..., description="Execution diagnostic state flag mapping operation status")
-    previews: list[PreviewIssue] = Field(default_factory=list, description="Aggregated sequence collection summarizing prospective differential modification payloads")
+    previews: List[PreviewIssue] = Field(default_factory=list, description="Aggregated sequence collection summarizing prospective differential modification payloads")
 
 
 class DiffLine(BaseModel):
@@ -179,7 +180,7 @@ class DiffResponse(BaseModel):
     """Schema representing a structured aggregation collection of calculated differential code change tracking fragments."""
 
     success: bool = Field(..., description="Execution diagnostic state flag mapping operation status")
-    diffs: list[DiffLine] = Field(default_factory=list, description="Aggregated collection tracking line differential modifications computed across the source scope")
+    diffs: List[DiffLine] = Field(default_factory=list, description="Aggregated collection tracking line differential modifications computed across the source scope")
 
 
 class GitBackupResponse(BaseModel):
@@ -204,3 +205,21 @@ class HtmlReportResponse(BaseModel):
     success: bool = Field(..., description="Execution diagnostic state flag mapping operation status")
     file_path: str = Field(..., description="The local absolute or relative filesystem path holding the written HTML visualization report document")
     message: str = Field(..., description="The diagnostic textual string summarizing HTML visual report generation processing logs")
+
+
+class GitRollbackRequest(BaseModel):
+    """Schema for incoming transactional repository branch rollback operations."""
+
+    project_path: str = Field(
+        ..., description="The target filesystem route tracking the local Git workspace location"
+    )
+    commit_hash: str = Field(
+        ..., description="The exact alphanumeric targeting cryptographic commit hash identifier to restore"
+    )
+
+
+class GitRollbackResponse(BaseModel):
+    """Schema representing the execution feedback result following a branch rollback invocation."""
+
+    success: bool = Field(..., description="Execution diagnostic state flag mapping operation status")
+    message: str = Field(..., description="The diagnostic textual string summarizing structural rollback processing logs")

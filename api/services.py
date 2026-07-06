@@ -11,6 +11,7 @@ import os
 import shutil
 import subprocess
 import threading
+from typing import List, Dict
 import uuid
 import zipfile
 from fastapi import UploadFile
@@ -36,6 +37,7 @@ from api.models import (
     GitBackupResponse,
     ZipUploadResponse,
     HtmlReportResponse,
+    GitRollbackResponse,
 )
 from analyzers.ruff_runner import run_ruff
 from analyzers.bandit_runner import run_bandit
@@ -50,10 +52,10 @@ from pipeline import run_pipeline
 logger = get_logger(__name__)
 
 # Module-level tracking ledger for in-memory background job management
-jobs: dict[str, JobResponse] = {}
+jobs: Dict[str, JobResponse] = {}
 
 # Module-level tracking ledger for in-memory historical scan logs
-scan_history: list[ScanHistoryEntry] = []
+scan_history: List[ScanHistoryEntry] = []
 
 
 def scan_project(project_path: str) -> ScanResponse:
@@ -76,7 +78,7 @@ def scan_project(project_path: str) -> ScanResponse:
         logger.warning("Project scan aborted | Specified path does not exist: %s", target_path)
         return ScanResponse(success=False, issues=[])
 
-    python_files: list[str] = []
+    python_files: List[str] = []
 
     if os.path.isdir(target_path):
         for root, _, files in os.walk(target_path):
@@ -91,7 +93,7 @@ def scan_project(project_path: str) -> ScanResponse:
         logger.info("Project scan finalized | No Python modules identified inside target: %s", target_path)
         return ScanResponse(success=True, issues=[])
 
-    raw_issues: list[IssueModel] = []
+    raw_issues: List[IssueModel] = []
 
     try:
         # 3. Execute Ruff Pipeline Layer (Passing base path vector)
@@ -139,7 +141,7 @@ def scan_project(project_path: str) -> ScanResponse:
 
         # 6. Cross-Engine Deduplication Logic Matrix Step
         seen_issues = set()
-        filtered_issues: list[IssueModel] = []
+        filtered_issues: List[IssueModel] = []
 
         for issue in raw_issues:
             issue_key = (issue.rule, issue.file, issue.line, issue.message)
@@ -239,7 +241,7 @@ def generate_report(project_path: str) -> ReportResponse:
         )
 
     total_issues = len(scan_result.issues)
-    by_rule: dict[str, int] = {}
+    by_rule: Dict[str, int] = {}
     
     ruff_count = 0
     bandit_count = 0
@@ -473,7 +475,7 @@ def preview_fixes(project_path: str) -> FixPreviewResponse:
         if not scan_result.success:
             return FixPreviewResponse(success=False, previews=[])
 
-        preview_list: list[PreviewIssue] = []
+        preview_list: List[PreviewIssue] = []
 
         for issue in scan_result.issues:
             try:
@@ -555,7 +557,7 @@ def generate_diff(project_path: str) -> DiffResponse:
         if not preview_result.success:
             return DiffResponse(success=False, diffs=[])
 
-        diff_list: list[DiffLine] = []
+        diff_list: List[DiffLine] = []
 
         for item in preview_result.previews:
             diff_list.append(
@@ -822,4 +824,71 @@ def generate_html_report(project_path: str) -> HtmlReportResponse:
             success=False,
             file_path="",
             message="HTML report generation failed.",
+        )
+
+
+def rollback_git_backup(project_path: str, commit_hash: str) -> GitRollbackResponse:
+    """Restore the project filesystem state to a specific revision via a hard Git reset.
+
+    Asserts Git markers exist in the project scope environment and updates HEAD, 
+    index, and working directories to point cleanly to the designated commit hash identifier.
+
+    Args:
+        project_path (str): Path targeting the local tracking Git workspace location.
+        commit_hash (str): Alphanumeric cryptographic commit identifier token to restore.
+
+    Returns:
+        GitRollbackResponse: Consolidated execution data schema mapping rollback outcomes.
+    """
+    try:
+        # Resolve and normalize targeting coordinates safely
+        target_path = os.path.normpath(os.path.abspath(project_path))
+
+        # Resolve parent tracking directory layer if targeting a specific file instance
+        if os.path.isfile(target_path):
+            repo_dir = os.path.dirname(target_path)
+        else:
+            repo_dir = target_path
+
+        # Assert workspace directory layer validity constraints
+        if not os.path.exists(repo_dir) or not os.path.isdir(repo_dir):
+            return GitRollbackResponse(
+                success=False,
+                message="Project is not a Git repository.",
+            )
+
+        # Assert repository infrastructure marker presence mapping
+        git_marker = os.path.join(repo_dir, ".git")
+        if not os.path.exists(git_marker):
+            return GitRollbackResponse(
+                success=False,
+                message="Project is not a Git repository.",
+            )
+
+        # Execute hard branch reset orchestration command
+        result = subprocess.run(
+            ["git", "reset", "--hard", commit_hash],
+            cwd=repo_dir,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        # Return structured outcomes according to process exit codes
+        if result.returncode == 0:
+            return GitRollbackResponse(
+                success=True,
+                message="Rollback completed successfully.",
+            )
+        
+        return GitRollbackResponse(
+            success=False,
+            message=result.stderr.strip(),
+        )
+
+    except Exception as exc:
+        logger.exception("Git rollback orchestration subsystem caught an unexpected execution pipeline exception: %s", str(exc))
+        return GitRollbackResponse(
+            success=False,
+            message="Git rollback failed.",
         )
