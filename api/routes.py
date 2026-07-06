@@ -19,6 +19,7 @@ from api.models import (
     ConfigResponse,
     FixPreviewResponse,
     DiffResponse,
+    GitBackupResponse,
 )
 from api.services import (
     scan_project,
@@ -32,6 +33,7 @@ from api.services import (
     get_config,
     preview_fixes,
     generate_diff,
+    create_git_backup,
 )
 
 # Initialize the central API router context
@@ -203,3 +205,16 @@ async def diff(request: FixRequest) -> DiffResponse:
         DiffResponse: Consolidated sequential bundle tracking isolated text line substitutions.
     """
     return generate_diff(request.project_path)
+
+
+@router.post("/git/backup", response_model=GitBackupResponse)
+async def git_backup(request: FixRequest) -> GitBackupResponse:
+    """Commit active repository alterations to create a transactional rollback node prior to code remediation.
+
+    Args:
+        request (FixRequest): Input structural target path wrapper container payload.
+
+    Returns:
+        GitBackupResponse: Execution context summary capturing the tracking result state and backup commit identifier.
+    """
+    return create_git_backup(request.project_path)
