@@ -4,8 +4,25 @@ Defines base routing structures, health-check diagnostics, and project analysis 
 """
 
 from fastapi import APIRouter
-from api.models import ScanRequest, ScanResponse, FixRequest, FixResponse, ReportResponse, JobResponse, JobStatus
-from api.services import scan_project, fix_project, generate_report, start_fix_job, get_job
+from api.models import (
+    ScanRequest,
+    ScanResponse,
+    FixRequest,
+    FixResponse,
+    ReportResponse,
+    JobResponse,
+    JobStatus,
+    ExportResponse,
+    ExportFormat,
+)
+from api.services import (
+    scan_project,
+    fix_project,
+    generate_report,
+    start_fix_job,
+    get_job,
+    export_report,
+)
 
 # Initialize the central API router context
 router = APIRouter()
@@ -103,3 +120,20 @@ async def job_status(job_id: str) -> JobResponse:
         )
 
     return job
+
+
+@router.get("/report/export", response_model=ExportResponse)
+async def export(
+    project_path: str,
+    export_format: ExportFormat,
+) -> ExportResponse:
+    """Generate diagnostic density metrics and serialize findings payload tracking reports to disk.
+
+    Args:
+        project_path (str): The target filesystem directory coordinate routing string to evaluate.
+        export_format (ExportFormat): The selected structural mapping encoding standard (json or csv).
+
+    Returns:
+        ExportResponse: Execution feedback metadata confirming written download target paths.
+    """
+    return export_report(project_path, export_format)

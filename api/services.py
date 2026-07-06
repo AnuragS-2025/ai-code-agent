@@ -4,6 +4,8 @@ Handles localized code file identification and sequentially orchestrates
 static diagnostic scanners with deduplication, performance optimization, and error tracing.
 """
 
+import csv
+import json
 import os
 import threading
 import uuid
@@ -15,6 +17,8 @@ from api.models import (
     ToolSummary,
     JobResponse,
     JobStatus,
+    ExportResponse,
+    ExportFormat,
 )
 from analyzers.ruff_runner import run_ruff
 from analyzers.bandit_runner import run_bandit
@@ -301,3 +305,63 @@ def get_job(job_id: str) -> JobResponse | None:
         JobResponse | None: The matching job snapshot profile tracking container or None.
     """
     return jobs.get(job_id)
+
+
+def export_report(project_path: str, export_format: ExportFormat) -> ExportResponse:
+    """Generate diagnostic summary metrics and format-serialize analytics data packages to disk.
+
+    Ensures downstream artifact storage structural paths are properly resolved, running explicit
+    encodings for file system transport as standard text frames.
+
+    Args:
+        project_path (str): Path targeting directory structures or individual modules.
+        export_format (ExportFormat): Enum declaration identifying requested output encodings.
+
+    Returns:
+        ExportResponse: Tracking summary validating artifact export locations and state summaries.
+    """
+    try:
+        report = generate_report(project_path)
+
+        if not report.success:
+            return ExportResponse(
+                success=False,
+                file_path="",
+                format=export_format,
+                message="Report generation failed.",
+            )
+
+        export_dir = "exports"
+        os.makedirs(export_dir, exist_ok=True)
+
+        if export_format == ExportFormat.JSON:
+            output_path = os.path.join(export_dir, "report.json")
+            with open(output_path, mode="w", encoding="utf-8") as json_file:
+                json.dump(report.model_dump(), json_file, indent=4)
+
+        elif export_format == ExportFormat.CSV:
+            output_path = os.path.join(export_dir, "report.csv")
+            with open(output_path, mode="w", encoding="utf-8", newline="") as csv_file:
+                writer = csv.writer(csv_file)
+                writer.writerow(["Rule", "Count"])
+                for rule, count in report.by_rule.items():
+                    writer.writerow([rule, count])
+
+        return ExportResponse(
+            success=True,
+            file_path=output_path,
+            format=export_format,
+            message="Report exported successfully.",
+        )
+
+    except Exception as exc:
+        logger.exception(
+            "Reporting framework encountered an unhandled error writing serializations to disk: %s",
+            str(exc),
+        )
+        return ExportResponse(
+            success=False,
+            file_path="",
+            format=export_format,
+            message="Report export failed.",
+        )

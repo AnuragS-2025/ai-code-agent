@@ -91,3 +91,19 @@ class JobResponse(BaseModel):
     job_id: str = Field(..., description="The unique identification cryptographic token tracking string for the worker task")
     status: JobStatus = Field(..., description="The active discrete execution state flag indicating job progress context")
     message: str = Field(..., description="The diagnostic textual string reporting details about the active processing state")
+
+
+class ExportFormat(str, Enum):
+    """Enumeration representing supported structured document output types for generated reports."""
+
+    JSON = "json"
+    CSV = "csv"
+
+
+class ExportResponse(BaseModel):
+    """Schema representing execution context feedback metadata returning localized download configurations."""
+
+    success: bool = Field(..., description="Execution diagnostic state flag mapping operation status")
+    file_path: str = Field(..., description="The local absolute or relative filesystem path holding the written export document")
+    format: ExportFormat = Field(..., description="The explicit structural encoding protocol chosen for tracking distribution")
+    message: str = Field(..., description="The diagnostic textual string summarizing analytical generation processing logs")
