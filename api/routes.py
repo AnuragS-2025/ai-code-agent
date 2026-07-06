@@ -15,6 +15,7 @@ from api.models import (
     ExportResponse,
     ExportFormat,
     ScanHistoryResponse,
+    SupportedToolsResponse,
 )
 from api.services import (
     scan_project,
@@ -24,6 +25,7 @@ from api.services import (
     get_job,
     export_report,
     get_scan_history,
+    get_supported_tools,
 )
 
 # Initialize the central API router context
@@ -149,3 +151,13 @@ async def history() -> ScanHistoryResponse:
         ScanHistoryResponse: Structured aggregate payload wrapping sequential execution records.
     """
     return get_scan_history()
+
+
+@router.get("/tools", response_model=SupportedToolsResponse)
+async def tools() -> SupportedToolsResponse:
+    """Fetch structured operational information tracking active and available backend engine subsystems.
+
+    Returns:
+        SupportedToolsResponse: Consolidated ledger payload detailing active static analysis frameworks.
+    """
+    return get_supported_tools()
