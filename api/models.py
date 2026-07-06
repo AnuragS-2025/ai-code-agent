@@ -107,3 +107,18 @@ class ExportResponse(BaseModel):
     file_path: str = Field(..., description="The local absolute or relative filesystem path holding the written export document")
     format: ExportFormat = Field(..., description="The explicit structural encoding protocol chosen for tracking distribution")
     message: str = Field(..., description="The diagnostic textual string summarizing analytical generation processing logs")
+
+
+class ScanHistoryEntry(BaseModel):
+    """Schema representing a historical timeline record of a project execution event entry."""
+
+    timestamp: str = Field(..., description="ISO 8601 serialized date-time tracking coordinate string detailing execution launch")
+    project_path: str = Field(..., description="The local filesystem absolute targeting coordinate route evaluated")
+    total_issues: int = Field(..., description="The overall grand total count of static analysis rule findings identified during execution")
+
+
+class ScanHistoryResponse(BaseModel):
+    """Schema representing the compiled list aggregate context wrapping all execution timeline historical logs."""
+
+    success: bool = Field(..., description="Execution diagnostic state flag mapping operation status")
+    history: list[ScanHistoryEntry] = Field(default_factory=list, description="Aggregated collection sequence profiling historical analytical diagnostic snapshots")

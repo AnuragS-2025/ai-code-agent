@@ -14,6 +14,7 @@ from api.models import (
     JobStatus,
     ExportResponse,
     ExportFormat,
+    ScanHistoryResponse,
 )
 from api.services import (
     scan_project,
@@ -22,6 +23,7 @@ from api.services import (
     start_fix_job,
     get_job,
     export_report,
+    get_scan_history,
 )
 
 # Initialize the central API router context
@@ -137,3 +139,13 @@ async def export(
         ExportResponse: Execution feedback metadata confirming written download target paths.
     """
     return export_report(project_path, export_format)
+
+
+@router.get("/history", response_model=ScanHistoryResponse)
+async def history() -> ScanHistoryResponse:
+    """Fetch the compiled in-memory ledger timeline archiving previous diagnostic scan operations.
+
+    Returns:
+        ScanHistoryResponse: Structured aggregate payload wrapping sequential execution records.
+    """
+    return get_scan_history()
