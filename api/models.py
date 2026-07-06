@@ -242,3 +242,30 @@ class ExplainResponse(BaseModel):
     explanation: str = Field(..., description="A detailed deep-dive explaining why the rule was triggered and the risks involved")
     recommendation: str = Field(..., description="Actionable architectural guidance for correcting the source violation cleanly")
     example_fix: str = Field(..., description="A code block snippet demonstrating the compliant remediation pattern")
+
+
+class SeverityLevel(str, Enum):
+    """Enumeration representing the categorized impact severity layers assigned to structural diagnostic findings."""
+
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+class SeverityIssue(BaseModel):
+    """Schema representing a flagged static analysis violation decorated with impact severity tracking details."""
+
+    rule: str = Field(..., description="The unique identification static analysis rule classification code tag")
+    severity: SeverityLevel = Field(..., description="The discrete impact classification prioritization layer assigned to the violation")
+    message: str = Field(..., description="The text descriptive diagnostic feedback message issued by the backend runner engine")
+    file: str = Field(..., description="The normalized structural filesystem path location of the evaluated source file module")
+    line: int = Field(..., description="The explicit source document code coordinate execution target line index position")
+
+
+class SeverityFilterResponse(BaseModel):
+    """Schema representing an absolute list collection payload containing engine findings matching selected query metrics."""
+
+    success: bool = Field(..., description="Execution diagnostic state flag indicating if the filtering run completed successfully")
+    severity: SeverityLevel = Field(..., description="The operational target impact criteria metric utilized to filter findings payloads")
+    issues: List[SeverityIssue] = Field(default_factory=list, description="Aggregated structural collection of analysis entries satisfying requested prioritization scopes")
