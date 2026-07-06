@@ -39,6 +39,9 @@ from api.models import (
     HtmlReportResponse,
     GitRollbackResponse,
     ExplainResponse,
+    SeverityLevel,
+    SeverityIssue,
+    SeverityFilterResponse,
 )
 from analyzers.ruff_runner import run_ruff
 from analyzers.bandit_runner import run_bandit
@@ -916,7 +919,7 @@ def explain_issue(
         ExplainResponse: Contextual AI-driven explanation feedback data structure payload.
     """
     try:
-        # Define the in-memory transactional definitions matrix mapping common rule logs
+        # Define the in-memory transitional definitions matrix mapping common rule logs
         rule_registry = {
             "B602": {
                 "explanation": "The execution of subprocesses via shell wrapper layers exposes the application to severe shell injection vectors.",
@@ -966,4 +969,80 @@ def explain_issue(
             explanation="",
             recommendation="",
             example_fix="",
+        )
+
+
+def get_issues_by_severity(project_path: str, severity: SeverityLevel) -> SeverityFilterResponse:
+    """Scan a target workspace and isolate diagnostic findings matching a specific impact classification criteria.
+
+    Leverages the core sequential scanning layer to aggregate deduplicated analysis logs,
+    applies a structural static taxonomy to translate rule identifier codes into prioritization
+    layers, and filters the results to match the requested severity criteria.
+
+    Args:
+        project_path (str): Path targeting directory structures or individual modules.
+        severity (SeverityLevel): The impact classification prioritization filter requested.
+
+    Returns:
+        SeverityFilterResponse: Data framework package wrapping the filtered findings collections.
+    """
+    try:
+        # 1. Reuse existing project core scan optimization pipeline layer
+        scan_result = scan_project(project_path)
+
+        if not scan_result.success:
+            return SeverityFilterResponse(
+                success=False,
+                severity=severity,
+                issues=[],
+            )
+
+        # 2. Establish deterministic prioritization rules layer mapping
+        critical_rules = {"B602", "B607"}
+        high_rules = {"B404", "B110"}
+        medium_rules = {"E722"}
+
+        filtered_list: List[SeverityIssue] = []
+
+        # 3. Categorize and evaluate each generated rule violation footprint
+        for issue in scan_result.issues:
+            rule_tag = issue.rule
+
+            if rule_tag in critical_rules:
+                mapped_severity = SeverityLevel.CRITICAL
+            elif rule_tag in high_rules:
+                mapped_severity = SeverityLevel.HIGH
+            elif rule_tag in medium_rules:
+                mapped_severity = SeverityLevel.MEDIUM
+            else:
+                mapped_severity = SeverityLevel.LOW
+
+            # 4. Filter only findings that align with requested impact criteria parameters
+            if mapped_severity == severity:
+                filtered_list.append(
+                    SeverityIssue(
+                        rule=issue.rule,
+                        severity=mapped_severity,
+                        message=issue.message,
+                        file=issue.file,
+                        line=issue.line,
+                    )
+                )
+
+        return SeverityFilterResponse(
+            success=True,
+            severity=severity,
+            issues=filtered_list,
+        )
+
+    except Exception as exc:
+        logger.exception(
+            "Impact severity classification and filtering system encountered an unhandled exception for severity %s: %s",
+            severity,
+            str(exc),
+        )
+        return SeverityFilterResponse(
+            success=False,
+            severity=severity,
+            issues=[],
         )

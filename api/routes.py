@@ -26,6 +26,8 @@ from api.models import (
     GitRollbackResponse,
     ExplainRequest,
     ExplainResponse,
+    SeverityLevel,
+    SeverityFilterResponse,
 )
 from api.services import (
     scan_project,
@@ -44,6 +46,7 @@ from api.services import (
     generate_html_report,
     rollback_git_backup,
     explain_issue,
+    get_issues_by_severity,
 )
 
 # Initialize the central API router context
@@ -290,3 +293,37 @@ async def explain(request: ExplainRequest) -> ExplainResponse:
         request.file,
         request.line,
     )
+
+
+@router.get("/issues/severity", response_model=SeverityFilterResponse)
+async def issues_by_severity(
+    project_path: str,
+    severity: SeverityLevel,
+) -> SeverityFilterResponse:
+    """Scan a target workspace path context and retrieve a filtered subset collection matching a designated severity level.
+
+    Args:
+        project_path (str): The target filesystem directory or file route string location to evaluate.
+        severity (SeverityLevel): The exact target impact metric used to isolate specific findings entries.
+
+    Returns:
+        SeverityFilterResponse: Filtered findings response container satisfying matching priority rules.
+    """
+    return get_issues_by_severity(project_path, severity)
+
+
+@router.get("/issues", response_model=SeverityFilterResponse)
+async def get_issues(
+    project_path: str,
+    severity: SeverityLevel,
+) -> SeverityFilterResponse:
+    """Retrieve deduplicated engine findings from a project path filtered explicitly by impact severity level.
+
+    Args:
+        project_path (str): The local absolute or relative filesystem route tracking the target code base to evaluate.
+        severity (SeverityLevel): The target categorical priority impact threshold tier chosen for filtering the results.
+
+    Returns:
+        SeverityFilterResponse: Consolidated data frame listing only analysis issues matching the given criteria.
+    """
+    return get_issues_by_severity(project_path, severity)
