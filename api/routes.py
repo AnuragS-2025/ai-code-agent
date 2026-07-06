@@ -22,6 +22,8 @@ from api.models import (
     GitBackupResponse,
     ZipUploadResponse,
     HtmlReportResponse,
+    GitRollbackRequest,
+    GitRollbackResponse,
 )
 from api.services import (
     scan_project,
@@ -38,6 +40,7 @@ from api.services import (
     create_git_backup,
     upload_zip,
     generate_html_report,
+    rollback_git_backup,
 )
 
 # Initialize the central API router context
@@ -250,3 +253,19 @@ async def html_report(project_path: str) -> HtmlReportResponse:
         HtmlReportResponse: Execution feedback metadata pointing to written web visualization layouts.
     """
     return generate_html_report(project_path)
+
+
+@router.post("/git/rollback", response_model=GitRollbackResponse)
+async def git_rollback(request: GitRollbackRequest) -> GitRollbackResponse:
+    """Restore the project file-system environment status backward to a designated cryptographic commit node.
+
+    Args:
+        request (GitRollbackRequest): Input context schema defining target repository routes and target commit hash tokens.
+
+    Returns:
+        GitRollbackResponse: Execution feedback metadata recording structural transformation operation outcomes.
+    """
+    return rollback_git_backup(
+        request.project_path,
+        request.commit_hash,
+    )
