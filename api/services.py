@@ -8,6 +8,7 @@ import csv
 from datetime import datetime
 import json
 import os
+import shutil
 import subprocess
 import threading
 import uuid
@@ -34,6 +35,7 @@ from api.models import (
     DiffResponse,
     GitBackupResponse,
     ZipUploadResponse,
+    HtmlReportResponse,
 )
 from analyzers.ruff_runner import run_ruff
 from analyzers.bandit_runner import run_bandit
@@ -659,6 +661,7 @@ def upload_zip(file: UploadFile) -> ZipUploadResponse:
 
     Ensures target transport directory schemas are created dynamically on disk, executes filename
     suffix format filtering assertions, and unrolls nested items safely using zipfile utilities.
+    Memory efficient chunk-wise copying is used to support large archive files.
 
     Args:
         file (UploadFile): The streaming multipart uploaded compressed binary wrapper file.
@@ -683,10 +686,9 @@ def upload_zip(file: UploadFile) -> ZipUploadResponse:
 
         zip_file_path = os.path.join(upload_dir, filename)
 
-        # 2. Stream multi-part incoming binary buffers directly to physical files
+        # 2. Chunk-wise copying using shutil to handle large zip files efficiently
         with open(zip_file_path, mode="wb") as target_buffer:
-            content = file.file.read()
-            target_buffer.write(content)
+            shutil.copyfileobj(file.file, target_buffer)
 
         # 3. Build descriptive dynamic extraction directory namespaces
         base_name = os.path.splitext(filename)[0]
@@ -711,4 +713,113 @@ def upload_zip(file: UploadFile) -> ZipUploadResponse:
             success=False,
             extract_path="",
             message="ZIP upload failed.",
+        )
+
+
+def generate_html_report(project_path: str) -> HtmlReportResponse:
+    """Compile diagnostic density metrics into a structured human-readable HTML document.
+
+    Invokes report generation systems, structures compiled metrics into clean tabular 
+    representations, and renders the static report onto the local file system.
+
+    Args:
+        project_path (str): Path targeting dynamic project workspace directory structures.
+
+    Returns:
+        HtmlReportResponse: Consolidated data structure object holding written file routes.
+    """
+    try:
+        # 1. Call the existing backend metrics calculation service
+        report_data = generate_report(project_path)
+
+        if not report_data.success:
+            return HtmlReportResponse(
+                success=False,
+                file_path="",
+                message="Failed to generate report.",
+            )
+
+        # 2. Initialize and assert target output storage parameters
+        report_dir = "reports"
+        os.makedirs(report_dir, exist_ok=True)
+        html_file_path = os.path.join(report_dir, "report.html")
+
+        # 3. Construct layout lines sequentially with basic tabular styling frameworks
+        by_rule_rows = "".join(
+            f"<tr><td style='border: 1px solid #ddd; padding: 8px;'>{rule}</td>"
+            f"<td style='border: 1px solid #ddd; padding: 8px;'>{count}</td></tr>"
+            for rule, count in report_data.by_rule.items()
+        )
+
+        html_content = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>AI Code Auto Fixer Report</title>
+</head>
+<body style="font-family: Arial, sans-serif; margin: 40px; color: #333; line-height: 1.6;">
+    <h1>AI Code Auto Fixer Report</h1>
+    <hr style="border: 0; border-top: 1px solid #eee; margin-bottom: 30px;">
+    
+    <h2>Total Issues</h2>
+    <p style="font-size: 24px; font-weight: bold; color: #d9534f; margin-top: 0;">{report_data.total_issues}</p>
+    
+    <h2>Issues by Tool</h2>
+    <table style="border-collapse: collapse; width: 100%; max-width: 500px; margin-bottom: 30px;">
+        <thead>
+            <tr style="background-color: #f5f5f5; text-align: left;">
+                <th style="border: 1px solid #ddd; padding: 8px;">Analyzer Tool</th>
+                <th style="border: 1px solid #ddd; padding: 8px;">Issues Found</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td style="border: 1px solid #ddd; padding: 8px;">Ruff</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">{report_data.by_tool.ruff}</td>
+            </tr>
+            <tr>
+                <td style="border: 1px solid #ddd; padding: 8px;">Bandit</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">{report_data.by_tool.bandit}</td>
+            </tr>
+            <tr>
+                <td style="border: 1px solid #ddd; padding: 8px;">Semgrep</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">{report_data.by_tool.semgrep}</td>
+            </tr>
+        </tbody>
+    </table>
+    
+    <h2>Issues by Rule</h2>
+    <table style="border-collapse: collapse; width: 100%; max-width: 600px;">
+        <thead>
+            <tr style="background-color: #f5f5f5; text-align: left;">
+                <th style="border: 1px solid #ddd; padding: 8px;">Rule Identifier</th>
+                <th style="border: 1px solid #ddd; padding: 8px;">Occurrence Density</th>
+            </tr>
+        </thead>
+        <tbody>
+            {by_rule_rows if by_rule_rows else "<tr><td colspan='2' style='border: 1px solid #ddd; padding: 8px; text-align: center;'>No issues encountered.</td></tr>"}
+        </tbody>
+    </table>
+</body>
+</html>
+"""
+
+        # 4. Flush written structures onto the targeted path coordinates
+        with open(html_file_path, mode="w", encoding="utf-8") as html_file:
+            html_file.write(html_content)
+
+        absolute_html_path = os.path.normpath(os.path.abspath(html_file_path))
+
+        return HtmlReportResponse(
+            success=True,
+            file_path=absolute_html_path,
+            message="HTML report generated successfully.",
+        )
+
+    except Exception as exc:
+        logger.exception("HTML visualization reporting subsystem encountered an unexpected execution failure: %s", str(exc))
+        return HtmlReportResponse(
+            success=False,
+            file_path="",
+            message="HTML report generation failed.",
         )
