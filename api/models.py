@@ -223,3 +223,22 @@ class GitRollbackResponse(BaseModel):
 
     success: bool = Field(..., description="Execution diagnostic state flag mapping operation status")
     message: str = Field(..., description="The diagnostic textual string summarizing structural rollback processing logs")
+
+
+class ExplainRequest(BaseModel):
+    """Schema for incoming AI-powered issue explanation tracking requests."""
+
+    rule: str = Field(..., description="The unique identification static analysis engine rule tag code")
+    message: str = Field(..., description="The raw diagnostic message description provided by the analyzer")
+    file: str = Field(..., description="Normalized structural path location of the targeted source file")
+    line: int = Field(..., description="The specific source file coordinate target line number")
+
+
+class ExplainResponse(BaseModel):
+    """Schema representing the contextual AI-driven analysis explanation and resolution feedback."""
+
+    success: bool = Field(..., description="Execution diagnostic state flag mapping operation status")
+    rule: str = Field(..., description="The unique identification rule tag code associated with the issue")
+    explanation: str = Field(..., description="A detailed deep-dive explaining why the rule was triggered and the risks involved")
+    recommendation: str = Field(..., description="Actionable architectural guidance for correcting the source violation cleanly")
+    example_fix: str = Field(..., description="A code block snippet demonstrating the compliant remediation pattern")
