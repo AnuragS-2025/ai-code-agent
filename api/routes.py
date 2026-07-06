@@ -1,8 +1,3 @@
-"""API Route definitions and endpoint handlers using FastAPI APIRouter.
-
-Defines base routing structures, health-check diagnostics, and project analysis entry vectors.
-"""
-
 from fastapi import APIRouter, UploadFile, File
 from api.models import (
     ScanRequest,
@@ -29,6 +24,7 @@ from api.models import (
     SeverityLevel,
     SeverityFilterResponse,
     RuleSearchResponse,
+    DashboardResponse,
 )
 from api.services import (
     scan_project,
@@ -49,6 +45,7 @@ from api.services import (
     explain_issue,
     get_issues_by_severity,
     get_rule_information,
+    get_dashboard,
 )
 
 # Initialize the central API router context
@@ -342,3 +339,13 @@ async def get_rule(rule_id: str) -> RuleSearchResponse:
         RuleSearchResponse: Metadata profile packaging titles, context definitions, and compliant code resolutions.
     """
     return get_rule_information(rule_id)
+
+
+@router.get("/dashboard", response_model=DashboardResponse)
+async def dashboard() -> DashboardResponse:
+    """Fetch the high-level analytical dashboard aggregating ecosystem operation statistics.
+
+    Returns:
+        DashboardResponse: Core metrics payload visual summary snapshot tracking remediation platform health.
+    """
+    return get_dashboard()

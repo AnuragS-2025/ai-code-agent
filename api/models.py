@@ -279,3 +279,34 @@ class RuleSearchResponse(BaseModel):
     title: str = Field(..., description="The short human-readable title summarizing the purpose of the target rule")
     description: str = Field(..., description="A comprehensive contextual deep-dive describing the structural violations caught by the rule")
     recommendation: str = Field(..., description="Actionable technical guidelines and practices required to cleanly satisfy code compliance rules")
+
+
+class DashboardSummary(BaseModel):
+    """Schema tracking overall cumulative diagnostic metrics across all project lifecycles."""
+
+    total_scans: int = Field(
+        ..., description="The overall grand total count of analytical execution events launched"
+    )
+    total_issues: int = Field(
+        ..., description="The cumulative grand total count of distinct engine findings identified"
+    )
+    total_fixed: int = Field(
+        ..., description="The cumulative grand total count of static rule violations automatically resolved"
+    )
+
+
+class DashboardResponse(BaseModel):
+    """Schema representing the aggregated telemetry payload framework for dashboard metrics visualization."""
+
+    success: bool = Field(
+        ..., description="Execution diagnostic state flag confirming whether dashboard metrics were compiled successfully"
+    )
+    summary: DashboardSummary = Field(
+        ..., description="Unified high-level metrics frame summarizing global scan, issue, and resolution statistics"
+    )
+    top_rules: Dict[str, int] = Field(
+        ..., description="Key-value matrix tracking the most frequent violating rules correlated to their density occurrences"
+    )
+    recent_scans: List[ScanHistoryEntry] = Field(
+        default_factory=list, description="Chronological listing wrapping the most recently executed project scan snapshots"
+    )
