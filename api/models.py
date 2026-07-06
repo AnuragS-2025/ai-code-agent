@@ -122,3 +122,17 @@ class ScanHistoryResponse(BaseModel):
 
     success: bool = Field(..., description="Execution diagnostic state flag mapping operation status")
     history: list[ScanHistoryEntry] = Field(default_factory=list, description="Aggregated collection sequence profiling historical analytical diagnostic snapshots")
+
+
+class ToolInfo(BaseModel):
+    """Schema tracking detailed diagnostic backend operational state configurations."""
+
+    name: str = Field(..., description="The structural engine registration identifier string code name")
+    enabled: bool = Field(..., description="Active activation feature flag detailing whether the runner layer is toggled on")
+
+
+class SupportedToolsResponse(BaseModel):
+    """Schema representing the aggregate breakdown schema response capturing status arrays of all backend engines."""
+
+    success: bool = Field(..., description="Execution diagnostic state flag mapping operation status")
+    tools: list[ToolInfo] = Field(default_factory=list, description="Aggregated sequence collection listing specific analyzer metadata frames")

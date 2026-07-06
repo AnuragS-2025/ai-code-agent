@@ -22,6 +22,8 @@ from api.models import (
     ExportFormat,
     ScanHistoryEntry,
     ScanHistoryResponse,
+    ToolInfo,
+    SupportedToolsResponse,
 )
 from analyzers.ruff_runner import run_ruff
 from analyzers.bandit_runner import run_bandit
@@ -391,4 +393,29 @@ def get_scan_history() -> ScanHistoryResponse:
     return ScanHistoryResponse(
         success=True,
         history=scan_history,
+    )
+
+
+def get_supported_tools() -> SupportedToolsResponse:
+    """Query configuration instances to resolve dynamic registration profiles for analysis runners.
+
+    Returns:
+        SupportedToolsResponse: Structured encapsulation sequence detailing active operational states.
+    """
+    return SupportedToolsResponse(
+        success=True,
+        tools=[
+            ToolInfo(
+                name="Ruff",
+                enabled=getattr(settings, "ruff_enabled", True),
+            ),
+            ToolInfo(
+                name="Bandit",
+                enabled=getattr(settings, "bandit_enabled", True),
+            ),
+            ToolInfo(
+                name="Semgrep",
+                enabled=getattr(settings, "semgrep_enabled", True),
+            ),
+        ],
     )
