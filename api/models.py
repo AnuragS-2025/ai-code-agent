@@ -136,3 +136,15 @@ class SupportedToolsResponse(BaseModel):
 
     success: bool = Field(..., description="Execution diagnostic state flag mapping operation status")
     tools: list[ToolInfo] = Field(default_factory=list, description="Aggregated sequence collection listing specific analyzer metadata frames")
+
+
+class ConfigResponse(BaseModel):
+    """Schema representing the current configuration environment settings profile state."""
+
+    success: bool = Field(..., description="Execution diagnostic state flag mapping operation status")
+    ai_enabled: bool = Field(..., description="Feature flag indicating if the AI pipeline orchestrator layer is active")
+    ruff_enabled: bool = Field(..., description="Feature flag detailing whether the Ruff linter engine execution is toggled on")
+    bandit_enabled: bool = Field(..., description="Feature flag detailing whether the Bandit security analysis pipeline is enabled")
+    semgrep_enabled: bool = Field(..., description="Feature flag detailing whether the Semgrep analytical processor is turned on")
+    semgrep_config_path: str = Field(..., description="The configuration ruleset targeting route path identifier utilized by Semgrep")
+    max_iterations: int = Field(..., description="The threshold cap bounding maximum sequential transformation processing loop attempts")
