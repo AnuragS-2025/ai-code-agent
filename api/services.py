@@ -5,6 +5,7 @@ static diagnostic scanners with deduplication, performance optimization, and err
 """
 
 import csv
+from datetime import datetime
 import json
 import os
 import threading
@@ -19,6 +20,8 @@ from api.models import (
     JobStatus,
     ExportResponse,
     ExportFormat,
+    ScanHistoryEntry,
+    ScanHistoryResponse,
 )
 from analyzers.ruff_runner import run_ruff
 from analyzers.bandit_runner import run_bandit
@@ -34,6 +37,9 @@ logger = get_logger(__name__)
 
 # Module-level tracking ledger for in-memory background job management
 jobs: dict[str, JobResponse] = {}
+
+# Module-level tracking ledger for in-memory historical scan logs
+scan_history: list[ScanHistoryEntry] = []
 
 
 def scan_project(project_path: str) -> ScanResponse:
@@ -129,6 +135,15 @@ def scan_project(project_path: str) -> ScanResponse:
 
         # 7. Deterministic Sorting Sequence 
         filtered_issues.sort(key=lambda issue: (issue.file, issue.line, issue.rule))
+
+        # 8. Store tracking snapshot inside history ledger
+        scan_history.append(
+            ScanHistoryEntry(
+                timestamp=datetime.now().isoformat(),
+                project_path=target_path,
+                total_issues=len(filtered_issues),
+            )
+        )
 
         return ScanResponse(success=True, issues=filtered_issues)
 
@@ -365,3 +380,15 @@ def export_report(project_path: str, export_format: ExportFormat) -> ExportRespo
             format=export_format,
             message="Report export failed.",
         )
+
+
+def get_scan_history() -> ScanHistoryResponse:
+    """Retrieve the unified aggregate history listing all recorded project scan events.
+
+    Returns:
+        ScanHistoryResponse: Data payload frame containing chronological scan log collections.
+    """
+    return ScanHistoryResponse(
+        success=True,
+        history=scan_history,
+    )
