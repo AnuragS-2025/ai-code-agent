@@ -21,6 +21,7 @@ from api.models import (
     DiffResponse,
     GitBackupResponse,
     ZipUploadResponse,
+    HtmlReportResponse,
 )
 from api.services import (
     scan_project,
@@ -36,6 +37,7 @@ from api.services import (
     generate_diff,
     create_git_backup,
     upload_zip,
+    generate_html_report,
 )
 
 # Initialize the central API router context
@@ -235,3 +237,16 @@ async def upload_project_zip(
         ZipUploadResponse: Consolidated feedback data schema holding target extraction paths and outcomes.
     """
     return upload_zip(file)
+
+
+@router.get("/report/html", response_model=HtmlReportResponse)
+async def html_report(project_path: str) -> HtmlReportResponse:
+    """Analyze a targeted workspace to compute and serialize visual web tracking layouts to disk.
+
+    Args:
+        project_path (str): The local filesystem query string location to be evaluated.
+
+    Returns:
+        HtmlReportResponse: Execution feedback metadata pointing to written web visualization layouts.
+    """
+    return generate_html_report(project_path)

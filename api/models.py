@@ -196,3 +196,11 @@ class ZipUploadResponse(BaseModel):
     success: bool = Field(..., description="Execution diagnostic state flag mapping operation status")
     extract_path: str = Field(..., description="The target absolute or relative filesystem route where the archive layout was unpacked")
     message: str = Field(..., description="The diagnostic textual string summarizing processing results or failure analysis context")
+
+
+class HtmlReportResponse(BaseModel):
+    """Schema representing the execution context feedback metadata returning localized HTML report configurations."""
+
+    success: bool = Field(..., description="Execution diagnostic state flag mapping operation status")
+    file_path: str = Field(..., description="The local absolute or relative filesystem path holding the written HTML visualization report document")
+    message: str = Field(..., description="The diagnostic textual string summarizing HTML visual report generation processing logs")
