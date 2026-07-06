@@ -28,6 +28,7 @@ from api.models import (
     ExplainResponse,
     SeverityLevel,
     SeverityFilterResponse,
+    RuleSearchResponse,
 )
 from api.services import (
     scan_project,
@@ -47,6 +48,7 @@ from api.services import (
     rollback_git_backup,
     explain_issue,
     get_issues_by_severity,
+    get_rule_information,
 )
 
 # Initialize the central API router context
@@ -327,3 +329,16 @@ async def get_issues(
         SeverityFilterResponse: Consolidated data frame listing only analysis issues matching the given criteria.
     """
     return get_issues_by_severity(project_path, severity)
+
+
+@router.get("/rules/{rule_id}", response_model=RuleSearchResponse)
+async def get_rule(rule_id: str) -> RuleSearchResponse:
+    """Query the internal rules engine metadata database to retrieve descriptive profiles for an explicit static finding code.
+
+    Args:
+        rule_id (str): The explicit rule designation key code string identifier to evaluate.
+
+    Returns:
+        RuleSearchResponse: Metadata profile packaging titles, context definitions, and compliant code resolutions.
+    """
+    return get_rule_information(rule_id)

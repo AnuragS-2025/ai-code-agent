@@ -42,6 +42,7 @@ from api.models import (
     SeverityLevel,
     SeverityIssue,
     SeverityFilterResponse,
+    RuleSearchResponse,
 )
 from analyzers.ruff_runner import run_ruff
 from analyzers.bandit_runner import run_bandit
@@ -1045,4 +1046,82 @@ def get_issues_by_severity(project_path: str, severity: SeverityLevel) -> Severi
             success=False,
             severity=severity,
             issues=[],
+        )
+
+
+def get_rule_information(rule_id: str) -> RuleSearchResponse:
+    """Query the internal rule encyclopedia to fetch metadata profiles for a specific analyzer rule.
+
+    References a deterministic in-memory dictionary lookup matrix to parse and return rule 
+    summaries, security implications, and actionable structural optimization guidelines.
+
+    Args:
+        rule_id (str): The unique rule identification tag code to evaluate.
+
+    Returns:
+        RuleSearchResponse: Validation data package wrapping the rule descriptive profiles.
+    """
+    try:
+        # 1. Establish the localized structural registry definitions matrix
+        rule_database: Dict[str, Dict[str, str]] = {
+            "B404": {
+                "title": "Import of subprocess module detected",
+                "description": "Indicates that the subprocess module is being imported. Subprocess calls can introduce severe security risks if untrusted input is passed incorrectly.",
+                "recommendation": "Ensure all downstream execution parameters use discrete list arrays and keep shell execution completely disabled."
+            },
+            "B602": {
+                "title": "Subprocess call with shell=True identified",
+                "description": "Spawning execution sequences through shell translation wrappers exposes applications to dangerous command injection vectors.",
+                "recommendation": "Refactor application code to pass execution arguments as a sequence list collection, completely ensuring shell=False remains active."
+            },
+            "B607": {
+                "title": "Start process with a partial path string entry",
+                "description": "Invoking operational systems executables using a relative path vector relies implicitly on shell search environments, exposing binaries to local spoofing vulnerabilities.",
+                "recommendation": "Always declare the fully qualified absolute system route path coordinate string to target executable system binaries safely."
+            },
+            "B110": {
+                "title": "Try-Except block with pass keyword pattern",
+                "description": "Intercepting execution errors and silently discarding the tracking payload via pass constructs hides structural bug roots, making performance analysis complex.",
+                "recommendation": "Incorporate structured logging frameworks inside evaluation blocks or catch highly specific transaction exceptions cleanly."
+            },
+            "E722": {
+                "title": "Do not use bare except statements",
+                "description": "Catching generic system anomalies via bare except statements blocks internal interrupts (like SystemExit or KeyboardInterrupt) and prevents clean worker exits.",
+                "recommendation": "Refactor execution fallback loops to explicitly bind targets using 'except Exception:' or specify exact error definitions."
+            }
+        }
+
+        # 2. Evaluate target registry presence constraints
+        if rule_id in rule_database:
+            metadata = rule_database[rule_id]
+            return RuleSearchResponse(
+                success=True,
+                rule=rule_id,
+                title=metadata["title"],
+                description=metadata["description"],
+                recommendation=metadata["recommendation"],
+            )
+
+        # 3. Handle gracefully when targeted keys are absent from our tracking matrix
+        logger.info("Rule metadata lookup completed with no entries found for identifier: %s", rule_id)
+        return RuleSearchResponse(
+            success=False,
+            rule=rule_id,
+            title="Unknown Rule Identifier",
+            description="The requested rule identifier does not match any known static analysis engine configuration records within our system database.",
+            recommendation="Please review the validation string or consult the documentation of the specific backend analyzer engine tool.",
+        )
+
+    except Exception as exc:
+        logger.exception(
+            "Internal rule registry encyclopedia infrastructure encountered an unhandled exception for rule %s: %s",
+            rule_id,
+            str(exc),
+        )
+        return RuleSearchResponse(
+            success=False,
+            rule=rule_id,
+            title="Error Querying Rule Database",
+            description="An unhandled exception occurred while processing the requested rule identification lookup transaction.",
+            recommendation="Retry the operation or look into backend operational traces for deeper structural analysis.",
         )

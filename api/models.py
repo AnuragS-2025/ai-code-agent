@@ -269,3 +269,13 @@ class SeverityFilterResponse(BaseModel):
     success: bool = Field(..., description="Execution diagnostic state flag indicating if the filtering run completed successfully")
     severity: SeverityLevel = Field(..., description="The operational target impact criteria metric utilized to filter findings payloads")
     issues: List[SeverityIssue] = Field(default_factory=list, description="Aggregated structural collection of analysis entries satisfying requested prioritization scopes")
+
+
+class RuleSearchResponse(BaseModel):
+    """Schema representing the metadata query feedback returned when resolving static analysis engine rules."""
+
+    success: bool = Field(..., description="Execution diagnostic state flag confirming whether the rule identification search succeeded")
+    rule: str = Field(..., description="The unique lookup identification rule tag code identifier evaluated")
+    title: str = Field(..., description="The short human-readable title summarizing the purpose of the target rule")
+    description: str = Field(..., description="A comprehensive contextual deep-dive describing the structural violations caught by the rule")
+    recommendation: str = Field(..., description="Actionable technical guidelines and practices required to cleanly satisfy code compliance rules")
