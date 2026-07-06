@@ -188,3 +188,11 @@ class GitBackupResponse(BaseModel):
     success: bool = Field(..., description="Execution diagnostic state flag mapping operation status")
     message: str = Field(..., description="Diagnostic textual string summarizing the Git backup result")
     commit_hash: str = Field(..., description="The Git commit hash generated for the created backup, if available")
+
+
+class ZipUploadResponse(BaseModel):
+    """Schema representing the execution feedback response after uploading and extracting a compressed project archive."""
+
+    success: bool = Field(..., description="Execution diagnostic state flag mapping operation status")
+    extract_path: str = Field(..., description="The target absolute or relative filesystem route where the archive layout was unpacked")
+    message: str = Field(..., description="The diagnostic textual string summarizing processing results or failure analysis context")

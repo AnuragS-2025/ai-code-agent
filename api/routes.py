@@ -3,7 +3,7 @@
 Defines base routing structures, health-check diagnostics, and project analysis entry vectors.
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, UploadFile, File
 from api.models import (
     ScanRequest,
     ScanResponse,
@@ -20,6 +20,7 @@ from api.models import (
     FixPreviewResponse,
     DiffResponse,
     GitBackupResponse,
+    ZipUploadResponse,
 )
 from api.services import (
     scan_project,
@@ -34,6 +35,7 @@ from api.services import (
     preview_fixes,
     generate_diff,
     create_git_backup,
+    upload_zip,
 )
 
 # Initialize the central API router context
@@ -218,3 +220,18 @@ async def git_backup(request: FixRequest) -> GitBackupResponse:
         GitBackupResponse: Execution context summary capturing the tracking result state and backup commit identifier.
     """
     return create_git_backup(request.project_path)
+
+
+@router.post("/upload/zip", response_model=ZipUploadResponse)
+async def upload_project_zip(
+    file: UploadFile = File(...)
+) -> ZipUploadResponse:
+    """Receive, store, and unpack a compressed multipart file archive containing python source projects.
+
+    Args:
+        file (UploadFile): Stream payload containing the incoming binary compressed attachment structure.
+
+    Returns:
+        ZipUploadResponse: Consolidated feedback data schema holding target extraction paths and outcomes.
+    """
+    return upload_zip(file)

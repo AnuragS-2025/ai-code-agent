@@ -11,6 +11,8 @@ import os
 import subprocess
 import threading
 import uuid
+import zipfile
+from fastapi import UploadFile
 from api.models import (
     ScanResponse,
     IssueModel,
@@ -31,6 +33,7 @@ from api.models import (
     DiffLine,
     DiffResponse,
     GitBackupResponse,
+    ZipUploadResponse,
 )
 from analyzers.ruff_runner import run_ruff
 from analyzers.bandit_runner import run_bandit
@@ -648,4 +651,64 @@ def create_git_backup(project_path: str) -> GitBackupResponse:
             success=False,
             message="Git backup failed.",
             commit_hash="",
+        )
+
+
+def upload_zip(file: UploadFile) -> ZipUploadResponse:
+    """Receive, validate, store, and extract a compressed file-system workspace data payload.
+
+    Ensures target transport directory schemas are created dynamically on disk, executes filename
+    suffix format filtering assertions, and unrolls nested items safely using zipfile utilities.
+
+    Args:
+        file (UploadFile): The streaming multipart uploaded compressed binary wrapper file.
+
+    Returns:
+        ZipUploadResponse: Consolidated feedback data schema holding extraction paths and outcomes.
+    """
+    try:
+        filename = file.filename or ""
+
+        # Validation: Reject non-.zip structural input formats
+        if not filename.lower().endswith(".zip"):
+            return ZipUploadResponse(
+                success=False,
+                extract_path="",
+                message="Only ZIP files are supported.",
+            )
+
+        # 1. Establish localized workspace directory transport segments
+        upload_dir = "uploads"
+        os.makedirs(upload_dir, exist_ok=True)
+
+        zip_file_path = os.path.join(upload_dir, filename)
+
+        # 2. Stream multi-part incoming binary buffers directly to physical files
+        with open(zip_file_path, mode="wb") as target_buffer:
+            content = file.file.read()
+            target_buffer.write(content)
+
+        # 3. Build descriptive dynamic extraction directory namespaces
+        base_name = os.path.splitext(filename)[0]
+        extract_dir = os.path.join(upload_dir, base_name)
+        os.makedirs(extract_dir, exist_ok=True)
+
+        # 4. Invoke the native standard extraction platform sequence
+        with zipfile.ZipFile(zip_file_path, mode="r") as zip_ref:
+            zip_ref.extractall(extract_dir)
+
+        absolute_extract_path = os.path.normpath(os.path.abspath(extract_dir))
+
+        return ZipUploadResponse(
+            success=True,
+            extract_path=absolute_extract_path,
+            message="ZIP uploaded and extracted successfully.",
+        )
+
+    except Exception as exc:
+        logger.exception("ZIP archive transport and processing infrastructure caught an unexpected exception: %s", str(exc))
+        return ZipUploadResponse(
+            success=False,
+            extract_path="",
+            message="ZIP upload failed.",
         )
