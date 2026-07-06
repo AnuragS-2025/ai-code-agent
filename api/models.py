@@ -165,3 +165,18 @@ class FixPreviewResponse(BaseModel):
 
     success: bool = Field(..., description="Execution diagnostic state flag mapping operation status")
     previews: list[PreviewIssue] = Field(default_factory=list, description="Aggregated sequence collection summarizing prospective differential modification payloads")
+
+
+class DiffLine(BaseModel):
+    """Schema tracking line-by-line modification differentials generated during a hypothetical file alteration."""
+
+    line_number: int = Field(..., description="The source document target line index tracking the modified structural position")
+    original: str = Field(..., description="The original unmodified text content sequence prior to executing any automation transformations")
+    modified: str = Field(..., description="The altered output text state computed to satisfy localized code compliance rules")
+
+
+class DiffResponse(BaseModel):
+    """Schema representing a structured aggregation collection of calculated differential code change tracking fragments."""
+
+    success: bool = Field(..., description="Execution diagnostic state flag mapping operation status")
+    diffs: list[DiffLine] = Field(default_factory=list, description="Aggregated collection tracking line differential modifications computed across the source scope")

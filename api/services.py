@@ -27,6 +27,8 @@ from api.models import (
     ConfigResponse,
     FixPreviewResponse,
     PreviewIssue,
+    DiffLine,
+    DiffResponse,
 )
 from analyzers.ruff_runner import run_ruff
 from analyzers.bandit_runner import run_bandit
@@ -521,3 +523,44 @@ def preview_fixes(project_path: str) -> FixPreviewResponse:
     except Exception as exc:
         logger.exception("Dry-run fix preview layer processing caught an unhandled exception: %s", str(exc))
         return FixPreviewResponse(success=False, previews=[])
+
+
+def generate_diff(project_path: str) -> DiffResponse:
+    """Generate line-by-line modification differentials by repurposing dry-run fix preview outputs.
+
+    Validates target filesystems, executes a zero-mutation code scan lifecycle, and extracts 
+    before-and-after line transformations mapped explicitly inside localized structural containers.
+
+    Args:
+        project_path (str): Path targeting directory structures or individual modules.
+
+    Returns:
+        DiffResponse: Consolidated sequence tracking line differential changes calculated over the workspace.
+    """
+    try:
+        target_path = os.path.normpath(os.path.abspath(project_path))
+
+        if not os.path.exists(target_path):
+            logger.warning("Diff generation aborted | Specified target path does not exist: %s", target_path)
+            return DiffResponse(success=False, diffs=[])
+
+        preview_result = preview_fixes(project_path)
+        if not preview_result.success:
+            return DiffResponse(success=False, diffs=[])
+
+        diff_list: list[DiffLine] = []
+
+        for item in preview_result.previews:
+            diff_list.append(
+                DiffLine(
+                    line_number=item.line,
+                    original=item.original,
+                    modified=item.suggested,
+                )
+            )
+
+        return DiffResponse(success=True, diffs=diff_list)
+
+    except Exception as exc:
+        logger.exception("Line differential generator layer encountered an unexpected exception: %s", str(exc))
+        return DiffResponse(success=False, diffs=[])

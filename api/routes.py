@@ -18,6 +18,7 @@ from api.models import (
     SupportedToolsResponse,
     ConfigResponse,
     FixPreviewResponse,
+    DiffResponse,
 )
 from api.services import (
     scan_project,
@@ -30,6 +31,7 @@ from api.services import (
     get_supported_tools,
     get_config,
     preview_fixes,
+    generate_diff,
 )
 
 # Initialize the central API router context
@@ -188,3 +190,16 @@ async def preview(request: FixRequest) -> FixPreviewResponse:
         FixPreviewResponse: Structured payload listing prospective automated remediation previews.
     """
     return preview_fixes(request.project_path)
+
+
+@router.post("/diff", response_model=DiffResponse)
+async def diff(request: FixRequest) -> DiffResponse:
+    """Generate line-by-line file modification differentials tracking prospective source adjustments.
+
+    Args:
+        request (FixRequest): Input structural target path wrapper container payload.
+
+    Returns:
+        DiffResponse: Consolidated sequential bundle tracking isolated text line substitutions.
+    """
+    return generate_diff(request.project_path)
