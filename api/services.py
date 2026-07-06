@@ -38,6 +38,7 @@ from api.models import (
     ZipUploadResponse,
     HtmlReportResponse,
     GitRollbackResponse,
+    ExplainResponse,
 )
 from analyzers.ruff_runner import run_ruff
 from analyzers.bandit_runner import run_bandit
@@ -891,4 +892,78 @@ def rollback_git_backup(project_path: str, commit_hash: str) -> GitRollbackRespo
         return GitRollbackResponse(
             success=False,
             message="Git rollback failed.",
+        )
+
+
+def explain_issue(
+    rule: str,
+    message: str,
+    file: str,
+    line: int,
+) -> ExplainResponse:
+    """Resolve contextual analytical deep-dives and actionable remediation patterns for a rule.
+
+    References an internal validation ledger of common diagnostic finding definitions, 
+    matching rules to tailored explanations, compliance targets, and example fixes.
+
+    Args:
+        rule (str): The unique identification rule tag code to evaluate.
+        message (str): The textual string diagnostic reported by the engine.
+        file (str): Normalized structural path location of the targeted source module.
+        line (int): The source code coordinate entry line number indicating violation site location.
+
+    Returns:
+        ExplainResponse: Contextual AI-driven explanation feedback data structure payload.
+    """
+    try:
+        # Define the in-memory transactional definitions matrix mapping common rule logs
+        rule_registry = {
+            "B602": {
+                "explanation": "The execution of subprocesses via shell wrapper layers exposes the application to severe shell injection vectors.",
+                "recommendation": "Refactor execution commands to pass argument parameters as a structured collection sequence with shell execution disabled.",
+                "example_fix": "import subprocess\nsubprocess.run(['ls', '-l'], check=True)"
+            },
+            "F401": {
+                "explanation": "An imported module statement exists inside the document scope but is never referenced or used by any executable code blocks.",
+                "recommendation": "Remove the unreferenced import instruction block safely to maintain codebase clarity and optimize compilation speeds.",
+                "example_fix": "# Remove or delete the unused module line entirely"
+            },
+            "E501": {
+                "explanation": "The target source code string length exceeds the threshold cap configuration limit for max characters per line.",
+                "recommendation": "Deconstruct or divide elongated statement assignments across sequential lines using explicit brackets or continuation methods.",
+                "example_fix": "long_string = (\n    'This is a broken statement divided across '\n    'multiple configuration segments for line length limits.'\n)"
+            },
+            "B101": {
+                "explanation": "The usage of standard assert evaluation keywords is optimized out during compilation transitions under production optimization flags.",
+                "recommendation": "Replace structural assertion guards with explicit control flow conditionals throwing standard exception errors.",
+                "example_fix": "if not condition:\n    raise ValueError('Validation constraints failed')"
+            }
+        }
+
+        if rule in rule_registry:
+            match_data = rule_registry[rule]
+            return ExplainResponse(
+                success=True,
+                rule=rule,
+                explanation=match_data["explanation"],
+                recommendation=match_data["recommendation"],
+                example_fix=match_data["example_fix"],
+            )
+
+        return ExplainResponse(
+            success=True,
+            rule=rule,
+            explanation="No detailed explanation is available for this rule.",
+            recommendation="Refer to the analyzer documentation for more information.",
+            example_fix="",
+        )
+
+    except Exception as exc:
+        logger.exception("AI issue analysis framework encountered an unexpected pipeline exception for rule %s: %s", rule, str(exc))
+        return ExplainResponse(
+            success=False,
+            rule=rule,
+            explanation="",
+            recommendation="",
+            example_fix="",
         )

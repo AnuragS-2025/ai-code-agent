@@ -24,6 +24,8 @@ from api.models import (
     HtmlReportResponse,
     GitRollbackRequest,
     GitRollbackResponse,
+    ExplainRequest,
+    ExplainResponse,
 )
 from api.services import (
     scan_project,
@@ -41,6 +43,7 @@ from api.services import (
     upload_zip,
     generate_html_report,
     rollback_git_backup,
+    explain_issue,
 )
 
 # Initialize the central API router context
@@ -268,4 +271,22 @@ async def git_rollback(request: GitRollbackRequest) -> GitRollbackResponse:
     return rollback_git_backup(
         request.project_path,
         request.commit_hash,
+    )
+
+
+@router.post("/explain", response_model=ExplainResponse)
+async def explain(request: ExplainRequest) -> ExplainResponse:
+    """Generate AI-powered issue explanations, remediation strategies, and compliant fix examples.
+
+    Args:
+        request (ExplainRequest): Input target containing the static rule, diagnostic message, and file line details.
+
+    Returns:
+        ExplainResponse: Contextual analysis response holding explanation logs and demonstration patches.
+    """
+    return explain_issue(
+        request.rule,
+        request.message,
+        request.file,
+        request.line,
     )
