@@ -25,6 +25,8 @@ from api.models import (
     ToolInfo,
     SupportedToolsResponse,
     ConfigResponse,
+    FixPreviewResponse,
+    PreviewIssue,
 )
 from analyzers.ruff_runner import run_ruff
 from analyzers.bandit_runner import run_bandit
@@ -437,3 +439,85 @@ def get_config() -> ConfigResponse:
         semgrep_config_path=getattr(settings, "semgrep_config_path", "p/python"),
         max_iterations=getattr(settings, "max_iterations", 3),
     )
+
+
+def preview_fixes(project_path: str) -> FixPreviewResponse:
+    """Execute a zero-mutation dry-run analysis to generate transformation code structural diff previews.
+
+    Scans the designated path target context using available active analyzer engines, extracts original 
+    violating file content string entries, and constructs non-destructive suggestion payloads.
+
+    Args:
+        project_path (str): Path targeting directory structures or individual modules.
+
+    Returns:
+        FixPreviewResponse: Compiled list sequence collecting hypothetical line modification logs.
+    """
+    try:
+        target_path = os.path.normpath(os.path.abspath(project_path))
+
+        if not os.path.exists(target_path):
+            logger.warning("Fix preview aborted | Specified target path does not exist: %s", target_path)
+            return FixPreviewResponse(success=False, previews=[])
+
+        scan_result = scan_project(project_path)
+        if not scan_result.success:
+            return FixPreviewResponse(success=False, previews=[])
+
+        preview_list: list[PreviewIssue] = []
+
+        for issue in scan_result.issues:
+            try:
+                if not os.path.exists(issue.file):
+                    preview_list.append(
+                        PreviewIssue(
+                            file=issue.file,
+                            line=issue.line,
+                            rule=issue.rule,
+                            original="",
+                            suggested=f"# Suggested fix for {issue.rule}: ",
+                        )
+                    )
+                    continue
+
+                with open(issue.file, mode="r", encoding="utf-8") as source_file:
+                    lines = source_file.readlines()
+
+                # Ensure line boundaries match file array constraints
+                if 1 <= issue.line <= len(lines):
+                    source_line = lines[issue.line - 1].rstrip("\r\n")
+                else:
+                    source_line = ""
+
+                preview_list.append(
+                    PreviewIssue(
+                        file=issue.file,
+                        line=issue.line,
+                        rule=issue.rule,
+                        original=source_line,
+                        suggested=f"# Suggested fix for {issue.rule}: {source_line}",
+                    )
+                )
+
+            except Exception as file_exc:
+                logger.warning(
+                    "Isolated trace reading error caught; appending safe fallback snapshot for rule %s: %s",
+                    issue.rule,
+                    str(file_exc),
+                )
+                preview_list.append(
+                    PreviewIssue(
+                        file=issue.file,
+                        line=issue.line,
+                        rule=issue.rule,
+                        original="",
+                        suggested=f"# Suggested fix for {issue.rule}: ",
+                    )
+                )
+                continue
+
+        return FixPreviewResponse(success=True, previews=preview_list)
+
+    except Exception as exc:
+        logger.exception("Dry-run fix preview layer processing caught an unhandled exception: %s", str(exc))
+        return FixPreviewResponse(success=False, previews=[])

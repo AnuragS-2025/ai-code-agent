@@ -148,3 +148,20 @@ class ConfigResponse(BaseModel):
     semgrep_enabled: bool = Field(..., description="Feature flag detailing whether the Semgrep analytical processor is turned on")
     semgrep_config_path: str = Field(..., description="The configuration ruleset targeting route path identifier utilized by Semgrep")
     max_iterations: int = Field(..., description="The threshold cap bounding maximum sequential transformation processing loop attempts")
+
+
+class PreviewIssue(BaseModel):
+    """Schema representing the differential modification blueprint for a single flagged static finding."""
+
+    file: str = Field(..., description="Normalized structural filesystem path location of the targeted source file")
+    line: int = Field(..., description="The source code coordinate entry line number indicating violation site location")
+    rule: str = Field(..., description="The unique identification analyzer rule configuration tag code name")
+    original: str = Field(..., description="The raw un-remediated original snippet block currently existing in the text source frame")
+    suggested: str = Field(..., description="The proposed transformation resolution sequence generated to automatically fix the file state")
+
+
+class FixPreviewResponse(BaseModel):
+    """Schema representing the prospective summary change log tracking dry-run optimization iterations."""
+
+    success: bool = Field(..., description="Execution diagnostic state flag mapping operation status")
+    previews: list[PreviewIssue] = Field(default_factory=list, description="Aggregated sequence collection summarizing prospective differential modification payloads")

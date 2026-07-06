@@ -17,6 +17,7 @@ from api.models import (
     ScanHistoryResponse,
     SupportedToolsResponse,
     ConfigResponse,
+    FixPreviewResponse,
 )
 from api.services import (
     scan_project,
@@ -28,6 +29,7 @@ from api.services import (
     get_scan_history,
     get_supported_tools,
     get_config,
+    preview_fixes,
 )
 
 # Initialize the central API router context
@@ -173,3 +175,16 @@ async def config() -> ConfigResponse:
         ConfigResponse: Unified serialization blueprint capturing running pipeline environments.
     """
     return get_config()
+
+
+@router.post("/preview", response_model=FixPreviewResponse)
+async def preview(request: FixRequest) -> FixPreviewResponse:
+    """Generate a non-destructive preview summarizing proposed automated source-code modifications.
+
+    Args:
+        request (FixRequest): Input structural target path wrapper container payload.
+
+    Returns:
+        FixPreviewResponse: Structured payload listing prospective automated remediation previews.
+    """
+    return preview_fixes(request.project_path)
