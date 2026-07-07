@@ -1,177 +1,265 @@
-# AI Code Agent
+# 🤖 AI Code Agent
 
-A modular Python framework for static code analysis, automated patch generation, and context-aware code fixing. The project combines multiple static analysis tools with an extensible fixing pipeline to identify, prioritize, and automatically resolve common code quality, security, and style issues.
-
----
-
-# Overview
-
-AI Code Agent is designed as a modular backend system that automates the software maintenance workflow. It performs static analysis, prioritizes detected issues, generates validated code patches, and applies fixes while maintaining a structured execution pipeline.
-
-The architecture emphasizes:
-
-- Modular design
-- Extensibility
-- Deterministic execution
-- Safe patch application
-- Context-aware code analysis
-- Comprehensive automated testing
+> An AI-powered automated code review and security analysis platform that detects vulnerabilities, generates intelligent fixes, validates patches, and streamlines the secure software development lifecycle.
 
 ---
 
-# Features
+## 🚀 Overview
 
-## Static Analysis
+AI Code Agent is an end-to-end code analysis platform built with **FastAPI**, **LLMs**, and **static analysis tools**. It combines traditional security scanners such as **Bandit** and **Semgrep** with AI-powered patch generation to help developers identify, understand, and fix issues efficiently.
 
-- Ruff integration
-- Bandit integration
-- Semgrep integration
-- Multi-analyzer aggregation
-- Unified issue collection
-- Issue prioritization
+The project also provides REST APIs for rule lookup, scan summaries, automated patch generation, and project analysis, making it suitable for integration into CI/CD pipelines and developer workflows.
 
-## Automated Code Fixing
+---
 
-- Plugin-based fixer architecture
-- Built-in rule fixers
-- AST-based code extraction
-- AST-safe code replacement
+# ✨ Features
+
+### 🔍 Static Code Analysis
+
+- Python security scanning using **Bandit**
+- Rule-based scanning using **Semgrep**
+- Project-wide analysis
+- Targeted scanning for changed files
+
+---
+
+### 🛡 Security Validation
+
+- Detects security vulnerabilities
+- Rule-based issue categorization
+- Severity tracking
+- Validation reports
+
+---
+
+### 🤖 AI Patch Generation
+
+- Context-aware LLM patch generation
+- Prompt engineering for secure fixes
 - Patch validation
-- Batch patch scheduling
+- Empty patch detection
+- Oversized patch detection
+- Safety guardrails
 
-## Project Intelligence
+---
 
-- Project indexing
-- Dependency graph construction
-- Cross-file context resolution
-- Module relationship analysis
-- Symbol discovery
+### 📚 Context Engine
 
-## Execution Pipeline
+- Project dependency graph
+- Code context retrieval
+- Intelligent prompt construction
+- Dependency-aware analysis
 
-- Modular pipeline orchestration
-- Batch execution
-- Context-aware processing
-- Automatic rescanning
-- Metrics collection
-- Structured logging
+---
 
-## Feedback System
+### 📂 Project Indexing
 
-- Persistent JSON database
-- Success recording
-- Failure recording
-- Historical execution tracking
-- Deterministic serialization
+- Automatic project scanning
+- Python module discovery
+- File indexing
+- Dependency tracking
+
+---
+
+### 🔎 Rule Search API
+
+Search security rules instantly.
+
+Example:
+
+```
+GET /rules/B602
+```
+
+Returns
+
+- Rule Title
+- Description
+- Recommendation
+
+---
+
+### 📊 Scan Summary Dashboard API
+
+Provides
+
+- Total scans
+- Total issues
+- Issues fixed
+- Top triggered rules
+- Recent scan history
+
+---
+
+### ⚙ Git Automation
+
+- Git integration
+- Automated workflows
+- Repository utilities
+
+---
+
+### 💬 Feedback System
+
+Store and manage feedback for generated patches.
+
+---
+
+### 🧪 Test Generation
+
+Utilities for automated testing and validation.
+
+---
+
+### ⚡ GitHub Actions CI
+
+Every Pull Request automatically performs
+
+- Ruff linting
+- Bandit security scan
+- Unit testing (Pytest)
+
+Bandit scans **only modified Python files**, significantly reducing CI execution time.
+
+---
+
+# 🏗 Architecture
+
+```
+                    +----------------------+
+                    |      Developer       |
+                    +----------+-----------+
+                               |
+                               |
+                         REST API Request
+                               |
+                               ▼
+                     +----------------------+
+                     |      FastAPI API     |
+                     +----------+-----------+
+                                |
+    --------------------------------------------------------------
+    |             |             |            |           |         |
+    ▼             ▼             ▼            ▼           ▼         ▼
+
+Project      Static        Context       Validation     LLM     Reports
+ Index       Analysis      Engine         Engine       Engine
+
+    |             |
+    ▼             ▼
+ Bandit       Semgrep
+
+                |
+                ▼
+
+         Patch Generation
+
+                |
+                ▼
+
+          Final Response
+```
+
+---
+
+# 🛠 Technology Stack
+
+## Backend
+
+- Python 3.12+
+- FastAPI
+- Pydantic
+- Uvicorn
+
+## AI
+
+- LangChain
+- Ollama
+- LLM Prompt Engineering
+
+## Security
+
+- Bandit
+- Semgrep
 
 ## Testing
 
-- Unit testing using Pytest
-- Module-level validation
-- Integration verification
-- Regression testing
+- Pytest
+
+## Code Quality
+
+- Ruff
+
+## CI/CD
+
+- GitHub Actions
 
 ---
 
-# System Architecture
-
-```
-                    main.py
-                        │
-                        ▼
-               Pipeline Controller
-                        │
-        ┌───────────────┴───────────────┐
-        │                               │
-        ▼                               ▼
- Static Analysis                Project Index
- Ruff                           Scanner
- Bandit                         Parser
- Semgrep                        Builder
-        │                               │
-        └───────────────┬───────────────┘
-                        ▼
-                 Context Engine
-                        │
-                        ▼
-              Issue Prioritization
-                        │
-                        ▼
-               Batch Scheduler
-                        │
-                        ▼
-               Built-in Fixers
-                        │
-                        ▼
-               Patch Generation
-                        │
-                        ▼
-               Patch Validation
-                        │
-                        ▼
-               Patch Application
-                        │
-                        ▼
-               Feedback Database
-```
-
----
-
-# Project Structure
+# 📁 Project Structure
 
 ```
 ai-code-agent/
 
+│
 ├── analyzers/
-├── builtin_fixers/
+├── api/
+├── codebase/
 ├── config/
 ├── context_engine/
 ├── feedback/
+├── git_automation/
+├── llm/
+├── logs/
+├── parsers/
 ├── patch_engine/
-├── plugins/
 ├── project_index/
+├── test_generator/
 ├── tests/
-
-├── pipeline.py
-├── main.py
+├── uploads/
+├── utils/
+├── validation/
+│
+├── .github/
+│   └── workflows/
+│       └── ci.yml
+│
 ├── requirements.txt
-├── pytest.ini
+├── requirements-ci.txt
+├── app.py
+├── pipeline.py
 └── README.md
 ```
 
 ---
 
-# Installation
+# ⚙ Installation
 
-Clone the repository
+Clone repository
 
 ```bash
 git clone https://github.com/AnuragS-2025/ai-code-agent.git
 ```
 
-Move into the project directory
+Move inside project
 
 ```bash
 cd ai-code-agent
 ```
 
-Create a virtual environment
-
-```bash
-python -m venv venv
-```
-
-Activate the environment
+Create virtual environment
 
 ### Windows
 
 ```bash
+python -m venv venv
 venv\Scripts\activate
 ```
 
-### Linux / macOS
+### Linux/macOS
 
 ```bash
+python3 -m venv venv
 source venv/bin/activate
 ```
 
@@ -183,232 +271,242 @@ pip install -r requirements.txt
 
 ---
 
-# Usage
-
-Analyze a single file
+# ▶ Running the API
 
 ```bash
-python main.py example.py
+uvicorn app:app --reload
 ```
 
-Analyze multiple files
+Swagger
 
-```bash
-python main.py file1.py file2.py
+```
+http://localhost:8000/docs
+```
+
+ReDoc
+
+```
+http://localhost:8000/redoc
 ```
 
 ---
 
-# Running Tests
+# 📡 API Endpoints
 
-Execute the complete test suite
+## Health
+
+```
+GET /health
+```
+
+---
+
+## Scan Project
+
+```
+POST /scan
+```
+
+Scans uploaded project for vulnerabilities.
+
+---
+
+## Rule Search
+
+```
+GET /rules/{rule_id}
+```
+
+Example
+
+```
+GET /rules/B602
+```
+
+---
+
+## Scan Summary
+
+```
+GET /summary
+```
+
+Returns
+
+- Total scans
+- Total issues
+- Fixed issues
+- Top rules
+- Recent scans
+
+---
+
+# 🧪 Running Tests
+
+Run all tests
 
 ```bash
 python -m pytest
 ```
 
-Execute individual test modules
+Run specific test
 
 ```bash
-python -m pytest tests/test_project_index.py -v
+python -m pytest tests/test_llm.py
 ```
+
+---
+
+# 🔒 Security Scanning
+
+Run Bandit
 
 ```bash
-python -m pytest tests/test_context_engine.py -v
+bandit -r .
 ```
+
+Run Bandit on specific files
 
 ```bash
-python -m pytest tests/test_feedback.py -v
+bandit file.py
+```
+
+Run Ruff
+
+```bash
+ruff check .
+```
+
+Run Semgrep
+
+```bash
+semgrep --config auto .
 ```
 
 ---
 
-# Core Components
+# ⚡ GitHub Actions
 
-## Static Analysis
+The project includes a lightweight CI pipeline.
 
-- Ruff
-- Bandit
-- Semgrep
+Every Pull Request automatically runs:
 
-## Patch Engine
-
-- AST Extraction
-- AST Replacement
-- Patch Validation
-
-## Project Index
-
-- Filesystem Scanner
-- AST Parser
-- Project Builder
-- Module Metadata
-
-## Context Engine
-
-- Dependency Graph
-- Module Relationships
-- Import Analysis
-- Export Analysis
-
-## Pipeline
-
-- Batch Scheduling
-- Issue Prioritization
-- Metrics Collection
-- Logging
-
-## Feedback
-
-- JSON Database
-- History Management
-- Serialization
-- Execution Records
-
----
-
-# Processing Workflow
-
-```
-Input Source Files
-        │
-        ▼
-Static Analysis
-(Ruff • Bandit • Semgrep)
-        │
-        ▼
-Issue Prioritization
-        │
-        ▼
-Batch Scheduler
-        │
-        ▼
-Project Index
-        │
-        ▼
-Context Engine
-        │
-        ▼
-Patch Generation
-        │
-        ▼
-Patch Validation
-        │
-        ▼
-Patch Application
-        │
-        ▼
-Feedback Database
-```
-
----
-
-# Testing
-
-The project includes automated tests covering:
-
-- Project indexing
-- Cross-file context engine
-- Feedback database
-- Serialization
-- Pipeline components
-
-Current test status:
-
-```
-21 Tests Passing
-```
-
----
-
-# Technology Stack
-
-- Python 3.13+
-- Ruff
-- Bandit
-- Semgrep
+- Ruff Linting
+- Bandit Security Scan
 - Pytest
-- AST
-- Dataclasses
-- JSON
-- Git
+
+Bandit only scans changed Python files for faster execution.
+
+Workflow location
+
+```
+.github/workflows/ci.yml
+```
 
 ---
 
-# Design Principles
+# 📊 Current Project Status
 
-The project is built around the following engineering principles:
-
-- Modular architecture
-- Separation of concerns
-- Immutable data models
-- Deterministic execution
-- Extensible plugin system
-- Read-only analysis layers
-- Safe code transformation
-
----
-
-# Development Progress
-
-## Phase 1
-
-Completed
-
-- Analyzer CLI
-- Multi-file Support
-- Logging System
-- Configuration System
-
-## Phase 2
-
-Completed
-
-- Plugin Architecture
-- Rule Dispatch
-- Built-in Fixers
-- AST Extraction
-- AST Replacement
-- Patch Engine
-
-## Phase 3
-
-Completed
-
-- Batch Scheduler
-- Project Indexing
-- Cross-file Context
-- Pipeline Integration
-- Feedback Database
-
-In Progress
-
-- Automatic Test Generation
-- Git Automation
+| Module | Status |
+|---------|--------|
+| FastAPI Backend | ✅ |
+| Bandit Integration | ✅ |
+| Semgrep Integration | ✅ |
+| AI Patch Generation | ✅ |
+| Validation Engine | ✅ |
+| Context Engine | ✅ |
+| Rule Search API | ✅ |
+| Scan Summary API | ✅ |
+| GitHub Actions CI | ✅ |
+| React Dashboard | 🚧 |
+| Docker Support | 🚧 |
+| Authentication | 🚧 |
 
 ---
 
-# Future Work
+# 🗺 Roadmap
 
-Planned improvements include:
+## Completed
 
-- Automatic test generation
-- Git workflow automation
-- AI-assisted feedback learning
-- Performance optimization
-- Docker support
-- CI/CD pipeline
-- Web-based interface
+- FastAPI Backend
+- Bandit Integration
+- Semgrep Integration
+- Context Engine
+- LLM Patch Generation
+- Validation Engine
+- Rule Search API
+- Dashboard API
+- GitHub Actions CI
+
+## In Progress
+
+- React Dashboard
+- Interactive Scan Reports
+- Project Upload UI
+
+## Planned
+
+- Authentication
+- Docker Support
+- Kubernetes Deployment
+- VS Code Extension
+- Multi-language Analysis
+- AI Chat Assistant
+- PDF Report Generation
 
 ---
 
-# License
+# 🤝 Contributing
 
-This project is intended for educational, research, and software engineering experimentation purposes.
+Contributions are welcome.
+
+1. Fork the repository
+2. Create a feature branch
+
+```bash
+git checkout -b feature/my-feature
+```
+
+3. Commit changes
+
+```bash
+git commit -m "Add new feature"
+```
+
+4. Push
+
+```bash
+git push origin feature/my-feature
+```
+
+5. Open a Pull Request
 
 ---
 
-# Author
+# 📄 License
 
-**Anurag Sharan**  
-GitHub: https://github.com/AnuragS-2025
+This project is licensed under the MIT License.
+
+---
+
+# 👨‍💻 Author
+
+**Anurag Sharan**
+
+GitHub
+
+https://github.com/AnuragS-2025
+
+---
+
+# ⭐ Support
+
+If you found this project useful,
+
+⭐ Star the repository
+
+🐛 Report issues
+
+💡 Suggest new features
+
+Happy Coding! 🚀
