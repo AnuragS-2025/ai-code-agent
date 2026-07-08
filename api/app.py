@@ -4,6 +4,7 @@ Configures application metadata, operational limits, and includes all sub-router
 """
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from api.routes import router as api_router
 
 
@@ -17,6 +18,17 @@ def create_app() -> FastAPI:
         title="AI Code Auto Fixer",
         description="REST API for the AI Code Auto Fixer pipeline",
         version="1.0.0",
+    )
+
+    # Configure CORS middleware
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://localhost:5173",  # Vite dev server
+        ],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
 
     # Attach the assembled API routing vectors
