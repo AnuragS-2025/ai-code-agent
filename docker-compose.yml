@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  # The main AI Code Agent platform application
+  web-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./logs:/app/logs
+    environment:
+      - OLLAMA_HOST=http://ollama-service:11434
+    depends_on:
+      - ollama-service
+
+  # Dedicated instance for running local LLM models
+  ollama-service:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_storage:/root/.ollama
+
+volumes:
+  ollama_storage:
