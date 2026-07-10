@@ -14,8 +14,7 @@ An intelligent developer platform that combines **Static Analysis**, **AI-Powere
 ![Bandit](https://img.shields.io/badge/Bandit-Security-red?style=for-the-badge)
 ![Semgrep](https://img.shields.io/badge/Semgrep-Static%20Analysis-7B61FF?style=for-the-badge)
 ![Ruff](https://img.shields.io/badge/Ruff-Linting-orange?style=for-the-badge)
-![MIT License](https://img.shields.io/badge/License-MIT-success?style=for-the-badge)
-![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-brightgreen?style=for-the-badge)
+
 
 </div>
 
@@ -1662,8 +1661,7 @@ AI & Full Stack Developer
 ### Connect with me
 
 - GitHub: https://github.com/AnuragS-2025
-- LinkedIn: *(Add your LinkedIn URL)*
-- Email: *(Add your Email)*
+- Email: as9771@srmist.edu.in
 
 ---
 
