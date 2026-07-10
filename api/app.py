@@ -20,15 +20,19 @@ def create_app() -> FastAPI:
         version="1.0.0",
     )
 
-    # Configure CORS middleware
+    # Configure CORS middleware safely for local development variations
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[
-            "http://localhost:5173",  # Vite dev server
+            "http://localhost:5173",   # Vite dev server standard header
+            "http://127.0.0.1:5173",   # Vite dev server loopback IP header fallback
+            "http://localhost:5173/",  # Standard trailing slash edge cases
+            "http://127.0.0.1:5173/"
         ],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["*"],          # Explicitly bubble up runtime headers to browser
     )
 
     # Attach the assembled API routing vectors

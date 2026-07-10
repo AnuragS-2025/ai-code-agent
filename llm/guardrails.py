@@ -1,9 +1,10 @@
 """Module for enforcing fast execution guardrails on LLM-generated code patches.
 
 This module validates generated blocks against simple structural properties (such as size,
-emptiness, and duplication) without executing heavy syntax analysis or external processes.
+emptiness, and duplication) and deep AST analysis without executing the code.
 """
 
+import ast
 from typing import Tuple
 
 
@@ -65,6 +66,9 @@ def validate_generated_patch(original_code: str, patch_code: str) -> Tuple[bool,
         A tuple containing (is_valid, reason). If valid, returns (True, "Valid patch").
         If a guardrail rule triggers a rejection, returns (False, descriptive_reason_string).
     """
+    # -----------------------------------------------------------------
+    # Basic Cleanliness Guards
+    # -----------------------------------------------------------------
     if is_empty_patch(patch_code):
         return False, "Rejected: Generated patch is empty or whitespace-only."
 
@@ -73,5 +77,62 @@ def validate_generated_patch(original_code: str, patch_code: str) -> Tuple[bool,
 
     if is_patch_too_large(original_code, patch_code):
         return False, "Rejected: Generated patch size is too large (exceeds original by more than 2 lines)."
+
+    # -----------------------------------------------------------------
+    # Guard 4: Unsafe Shell Execution Prevention
+    # -----------------------------------------------------------------
+    unsafe_patterns = ["bash", "os.system", "cos.system", "os.popen"]
+    for pattern in unsafe_patterns:
+        if pattern in patch_code:
+            return False, f"Rejected: Patch contains unsafe execution pattern/keyword '{pattern}'."
+
+    # -----------------------------------------------------------------
+    # Guard 1: AST Parsing Check (Syntax Validation)
+    # -----------------------------------------------------------------
+    try:
+        original_tree = ast.parse(original_code)
+    except SyntaxError as e:
+        # Fallback if original block was a broken snippet, but we must parse patch safely
+        original_tree = None
+
+    try:
+        patched_tree = ast.parse(patch_code)
+    except SyntaxError as e:
+        return False, f"Rejected: Patched code contains invalid Python syntax: {e}"
+
+    # -----------------------------------------------------------------
+    # Structural Validation via AST (Guards 2 & 3)
+    # -----------------------------------------------------------------
+    if original_tree and original_tree.body and patched_tree.body:
+        orig_root = original_tree.body[0]
+        patch_root = patched_tree.body[0]
+        
+        # Guard 2: Root Structural Statement Type Matching
+        # If original is FunctionDef or Try block, the patched root must match exactly
+        if isinstance(orig_root, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Try)):
+            if type(orig_root) != type(patch_root):
+                return (
+                    False, 
+                    f"Rejected: Top-level structural block mismatch. "
+                    f"Original was '{type(orig_root).__name__}', but patched is '{type(patch_root).__name__}'."
+                )
+
+        # Guard 3: Scope Drift / Broad Rewrite Prevention
+        # If the extractor extracted an inner statement list (not a function definition block),
+        # but the AI wraps it or rewrites it from root level 1 (introducing a Function/Class declaration), reject it.
+        orig_has_declaration = any(
+            isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) 
+            for node in original_tree.body
+        )
+        patch_has_declaration = isinstance(
+            patch_root, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+        )
+        
+        if patch_has_declaration and not orig_has_declaration:
+            return (
+                False, 
+                "Rejected: Scope drift detected. Patch attempts to rewrite or introduce "
+                "an outer function/class definition wrapper missing from the original extracted block."
+            )
 
     return True, "Valid patch"

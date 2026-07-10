@@ -66,26 +66,15 @@ scan_history: List[ScanHistoryEntry] = []
 
 
 def scan_project(project_path: str) -> ScanResponse:
-    """Collect Python target modules, invoke static analysis engines, and merge diagnostics.
+    """Scan project, aggregate findings and generate .agent_report.json"""
 
-    Optimizes engine performance by passing directory scopes directly to alleviate
-    Windows CLI environment limits, deduplicates items, and balances tracking sequences.
-
-    Args:
-        project_path (str): Path targeting directory structures or individual modules.
-
-    Returns:
-        ScanResponse: Consolidated data structure object frame holding findings.
-    """
-    # Resolve and normalize targeting coordinates safely
     target_path = os.path.normpath(os.path.abspath(project_path))
-    
-    # 1. Defensive Path Guardrail Validation
+
     if not os.path.exists(target_path):
-        logger.warning("Project scan aborted | Specified path does not exist: %s", target_path)
+        logger.warning("Target path does not exist: %s", target_path)
         return ScanResponse(success=False, issues=[])
 
-    python_files: List[str] = []
+    python_files = []
 
     if os.path.isdir(target_path):
         for root, _, files in os.walk(target_path):
@@ -95,18 +84,20 @@ def scan_project(project_path: str) -> ScanResponse:
     elif os.path.isfile(target_path) and target_path.endswith(".py"):
         python_files.append(target_path)
 
-    # 2. Empty Scope Structural Validation
     if not python_files:
-        logger.info("Project scan finalized | No Python modules identified inside target: %s", target_path)
+        logger.warning("No python files found in %s", target_path)
         return ScanResponse(success=True, issues=[])
 
-    raw_issues: List[IssueModel] = []
+    raw_issues = []
 
     try:
-        # 3. Execute Ruff Pipeline Layer (Passing base path vector)
+
+        # ---------------- Ruff ----------------
+
         if getattr(settings, "ruff_enabled", True):
             ruff_raw = run_ruff(target_path)
             ruff_parsed = parse_ruff(ruff_raw)
+
             for issue in ruff_parsed:
                 raw_issues.append(
                     IssueModel(
@@ -117,10 +108,12 @@ def scan_project(project_path: str) -> ScanResponse:
                     )
                 )
 
-        # 4. Execute Bandit Pipeline Layer (Passing base path vector)
+        # ---------------- Bandit ----------------
+
         if getattr(settings, "bandit_enabled", True):
             bandit_raw = run_bandit(target_path)
             bandit_parsed = parse_bandit(bandit_raw)
+
             for issue in bandit_parsed:
                 raw_issues.append(
                     IssueModel(
@@ -131,11 +124,19 @@ def scan_project(project_path: str) -> ScanResponse:
                     )
                 )
 
-        # 5. Execute Semgrep Pipeline Layer (Single Run Project Level Optimization)
+        # ---------------- Semgrep ----------------
+
         if getattr(settings, "semgrep_enabled", True):
-            semgrep_config = getattr(settings, "semgrep_config_path", "p/python")
-            semgrep_raw = run_semgrep(target_path, set(), config=semgrep_config)
+            config = getattr(settings, "semgrep_config_path", "p/python")
+
+            semgrep_raw = run_semgrep(
+                target_path,
+                set(),
+                config=config,
+            )
+
             semgrep_parsed = parse_semgrep(semgrep_raw)
+
             for issue in semgrep_parsed:
                 raw_issues.append(
                     IssueModel(
@@ -146,20 +147,36 @@ def scan_project(project_path: str) -> ScanResponse:
                     )
                 )
 
-        # 6. Cross-Engine Deduplication Logic Matrix Step
-        seen_issues = set()
-        filtered_issues: List[IssueModel] = []
+        # ---------------- Deduplicate ----------------
+
+        seen = set()
+        filtered_issues = []
 
         for issue in raw_issues:
-            issue_key = (issue.rule, issue.file, issue.line, issue.message)
-            if issue_key not in seen_issues:
-                seen_issues.add(issue_key)
+
+            key = (
+                issue.rule,
+                issue.file,
+                issue.line,
+                issue.message,
+            )
+
+            if key not in seen:
+                seen.add(key)
                 filtered_issues.append(issue)
 
-        # 7. Deterministic Sorting Sequence 
-        filtered_issues.sort(key=lambda issue: (issue.file, issue.line, issue.rule))
+        filtered_issues.sort(
+            key=lambda x: (
+                x.file,
+                x.line,
+                x.rule,
+            )
+        )
 
-        # 8. Store tracking snapshot inside history ledger
+        logger.info("TOTAL ISSUES FOUND: %d", len(filtered_issues))
+
+        # ---------------- History ----------------
+
         scan_history.append(
             ScanHistoryEntry(
                 timestamp=datetime.now().isoformat(),
@@ -168,11 +185,74 @@ def scan_project(project_path: str) -> ScanResponse:
             )
         )
 
-        return ScanResponse(success=True, issues=filtered_issues)
+        # ---------------- Report ----------------
+
+        by_tool = {
+            "ruff": 0,
+            "bandit": 0,
+            "semgrep": 0,
+        }
+
+        by_rule = {}
+
+        for issue in filtered_issues:
+
+            rule = issue.rule.upper()
+
+            if rule.startswith("B"):
+                by_tool["bandit"] += 1
+
+            elif rule.startswith("F") or rule.startswith("E"):
+                by_tool["ruff"] += 1
+
+            else:
+                by_tool["semgrep"] += 1
+
+            by_rule[rule] = by_rule.get(rule, 0) + 1
+
+        report = {
+            "success": True,
+            "total_issues": len(filtered_issues),
+            "issues": [
+                issue.model_dump()
+                for issue in filtered_issues
+            ],
+            "by_tool": by_tool,
+            "by_rule": by_rule,
+        }
+
+        report_path = os.path.join(
+            target_path,
+            ".agent_report.json",
+        )
+
+        with open(
+            report_path,
+            "w",
+            encoding="utf-8",
+        ) as fp:
+            json.dump(
+                report,
+                fp,
+                indent=2,
+            )
+
+        logger.info(
+            "Report written to %s",
+            report_path,
+        )
+
+        return ScanResponse(
+            success=True,
+            issues=filtered_issues,
+        )
 
     except Exception as exc:
-        logger.exception("Project scan failed catastrophically: %s", str(exc))
-        return ScanResponse(success=False, issues=[])
+        logger.exception("Scan failed: %s", exc)
+        return ScanResponse(
+            success=False,
+            issues=[],
+        )
 
 
 def fix_project(project_path: str) -> FixResponse:
@@ -205,14 +285,17 @@ def fix_project(project_path: str) -> FixResponse:
         target_files = [target_path]
         
         # 3. Synchronously Execute Core Transformation Automation Pipeline Layer
+        # 3. Synchronously Execute Core Transformation Automation Pipeline Layer
         result = run_pipeline(target_files)
-        fixed = result.get("fixed", 0)
+
+        fixed = result.get("issues_fixed", result.get("fixed", 0))
+        modified = result.get("files_modified", 0)
 
         return FixResponse(
-            success=True,
-            message="Pipeline execution completed successfully.",
-            files_modified=fixed,
-            issues_fixed=fixed,
+          success=True,
+          message="Pipeline execution completed successfully.",
+          files_modified=modified,
+          issues_fixed=fixed,
         )
 
     except Exception as exc:
@@ -472,18 +555,21 @@ def preview_fixes(project_path: str) -> FixPreviewResponse:
         FixPreviewResponse: Compiled list sequence collecting hypothetical line modification logs.
     """
     try:
+        # 1. Path Normalization
         target_path = os.path.normpath(os.path.abspath(project_path))
 
         if not os.path.exists(target_path):
             logger.warning("Fix preview aborted | Specified target path does not exist: %s", target_path)
             return FixPreviewResponse(success=False, previews=[])
 
-        scan_result = scan_project(project_path)
+        # 🎯 FIX: Passing the consistent, normalized target_path to scan_project
+        scan_result = scan_project(target_path)
         if not scan_result.success:
             return FixPreviewResponse(success=False, previews=[])
 
         preview_list: List[PreviewIssue] = []
 
+        # 2. Process and extract line differentials safely
         for issue in scan_result.issues:
             try:
                 if not os.path.exists(issue.file):
@@ -540,7 +626,6 @@ def preview_fixes(project_path: str) -> FixPreviewResponse:
         logger.exception("Dry-run fix preview layer processing caught an unhandled exception: %s", str(exc))
         return FixPreviewResponse(success=False, previews=[])
 
-
 def generate_diff(project_path: str) -> DiffResponse:
     """Generate line-by-line modification differentials by repurposing dry-run fix preview outputs.
 
@@ -554,25 +639,36 @@ def generate_diff(project_path: str) -> DiffResponse:
         DiffResponse: Consolidated sequence tracking line differential changes calculated over the workspace.
     """
     try:
+        # 1. Path Absolute & Normalization Lifecycle
         target_path = os.path.normpath(os.path.abspath(project_path))
 
         if not os.path.exists(target_path):
             logger.warning("Diff generation aborted | Specified target path does not exist: %s", target_path)
             return DiffResponse(success=False, diffs=[])
 
-        preview_result = preview_fixes(project_path)
+        # 🎯 FIX: Passing the consistent, normalized target_path instead of raw project_path
+        preview_result = preview_fixes(target_path)
         if not preview_result.success:
             return DiffResponse(success=False, diffs=[])
 
         diff_list: List[DiffLine] = []
 
+        # 2. Extract and Map Previews into Structural Diff Containers
         for item in preview_result.previews:
             diff_list.append(
                 DiffLine(
+                    file=item.file,
                     line_number=item.line,
                     original=item.original,
                     modified=item.suggested,
                 )
+            )
+
+        # 3. Safe Empty Diff Guard Clause
+        if not diff_list:
+            return DiffResponse(
+                success=True,
+                diffs=[],
             )
 
         return DiffResponse(success=True, diffs=diff_list)

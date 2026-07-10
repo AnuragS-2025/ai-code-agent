@@ -75,12 +75,19 @@ class LLMManager:
                 logger.warning("AI Fix Cycle Aborted: Parsed response code block is empty.")
                 return None
 
-            # 4. Guardrails Verification Phase
+            # -----------------------------------------------------------------
+            # AI GUARDRAIL: Same Code Check
+            # -----------------------------------------------------------------
+            if cleaned_patch.strip() == code_block.strip():
+                logger.warning("AI Patch Rejected: LLM returned the exact same unchanged code block.")
+                return None
+
+            # 4. Guardrails Verification Phase (Safety & Structural Integrity)
             logger.info("Enforcing local structural guardrail checks on the parsed patch.")
             is_valid, reason = validate_generated_patch(code_block, cleaned_patch)
 
             if not is_valid:
-                logger.warning("AI Patch Rejected by Guardrails: %s", reason)
+                logger.warning("AI Patch Rejected by Guardrails (Unsafe/Invalid Code): %s", reason)
                 return None
 
             # 5. Success Capture

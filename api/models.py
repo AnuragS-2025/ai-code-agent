@@ -171,11 +171,25 @@ class FixPreviewResponse(BaseModel):
 class DiffLine(BaseModel):
     """Schema tracking line-by-line modification differentials generated during a hypothetical file alteration."""
 
-    line_number: int = Field(..., description="The source document target line index tracking the modified structural position")
-    original: str = Field(..., description="The original unmodified text content sequence prior to executing any automation transformations")
-    modified: str = Field(..., description="The altered output text state computed to satisfy localized code compliance rules")
+    file: str = Field(
+        ...,
+        description="Source file containing the proposed modification"
+    )
 
+    line_number: int = Field(
+        ...,
+        description="The source document target line index tracking the modified structural position"
+    )
 
+    original: str = Field(
+        ...,
+        description="The original unmodified text content sequence prior to executing any automation transformations"
+    )
+
+    modified: str = Field(
+        ...,
+        description="The altered output text state computed to satisfy localized code compliance rules"
+    )
 class DiffResponse(BaseModel):
     """Schema representing a structured aggregation collection of calculated differential code change tracking fragments."""
 

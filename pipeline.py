@@ -50,6 +50,10 @@ AI_FALLBACK_RULES = {
     # Future AI-only rules
 }
 
+NON_AUTOFIXABLE_RULES = {
+    "B404",
+}
+
 # ==========================================
 # Telemetry Integration Wrappers
 # ==========================================
@@ -115,6 +119,7 @@ def _run_analyzers_and_filter(target_files: list[str], failed_issues: set) -> li
 
     return processed_issues
 
+
 def _collect_patches(
     filtered_issues: list[dict],
     failed_issues: set,
@@ -133,6 +138,14 @@ def _collect_patches(
     files_touched_this_iteration = set()
 
     for issue in filtered_issues:
+        # Check for non-autofixable informational rules
+        if issue["rule"] in NON_AUTOFIXABLE_RULES:
+            logger.info(
+                "Skipping informational rule %s",
+                issue["rule"],
+            )
+            continue
+
         target_file = issue["file"]
 
         # Dynamic check for structural collision safeguards
@@ -166,7 +179,27 @@ def _collect_patches(
                 metrics["context_lookup_failures"] += 1
                 logger.error("Failed to resolve context for file %s: %s", target_file, str(e))
                 
-        block = extract_code_block(target_file, issue["line"])
+        # CRITICAL FIX FOR PROBLEM 2: Special line extraction constraint for F401 to prevent function deletion
+        if issue["rule"] == "F401":
+            try:
+                with open(target_file, "r", encoding="utf-8") as f:
+                    lines = f.readlines()
+                
+                if 1 <= issue["line"] <= len(lines):
+                    code_block = lines[issue["line"] - 1]
+                    block = {
+                        "code": code_block,
+                        "start": issue["line"],
+                        "end": issue["line"]
+                    }
+                else:
+                    block = extract_code_block(target_file, issue["line"])
+            except Exception as e:
+                logger.warning("F401 explicit line fallback triggered due to read error: %s", str(e))
+                block = extract_code_block(target_file, issue["line"])
+        else:
+            block = extract_code_block(target_file, issue["line"])
+
         code_block = block["code"]
         if not code_block.strip():
             msg = "Could not extract block structures (empty string extracted)."
@@ -177,7 +210,17 @@ def _collect_patches(
             continue
         logger.debug("Extracted Block:\n%s", code_block)
 
+        # =================================================================
+        # DEBUG LOG: Rule lookup aur Configuration state check
+        # =================================================================
         rule_meta = RULES.get(issue["rule"])
+        logger.info(
+            "Rule=%s | rule_meta=%s | ai_enabled=%s",
+            issue["rule"],
+            rule_meta,
+            settings.ai_enabled,
+        )
+
         fixed_block = None
         use_llm_fallback = False
 
@@ -212,7 +255,6 @@ def _collect_patches(
                     logger.warning("File-level built-in fixer failed for rule %s, dropping to LLM fallback: %s", issue["rule"], str(e))
                     use_llm_fallback = True
         else:
-            # FIX: Explicit routing logic block for unsupported/unknown rules
             if settings.ai_enabled:
                 logger.info("🤖 Using LLM fallback for unsupported rule %s", issue["rule"])
                 use_llm_fallback = True
@@ -224,9 +266,12 @@ def _collect_patches(
 
         # Phase 2: AI Fallback Engine Trigger
         if (use_llm_fallback or fixed_block is None) and settings.ai_enabled:
+            # =================================================================
+            # DEBUG LOG: Fallback Execution State Entry Log
+            # =================================================================
+            logger.info("===== LLM FALLBACK CALLED =====")
             logger.info(" 🤖  Using AI fallback auto-fixer for %s", issue["rule"])
             
-            # Context normalization step to guard against serialization mismatch issues
             normalized_context = str(context) if context is not None else None
 
             fixed_block = llm_manager.generate_patch(
@@ -243,7 +288,6 @@ def _collect_patches(
                 _record_feedback_safe(feedback_manager, issue["rule"], target_file, iteration, False, msg)
                 continue
 
-        # Ultimate fallback safety catch
         if fixed_block is None:
             logger.warning(" ⚠  Skipping unsupported or unresolvable rule: %s", issue["rule"])
             failed_issues.add((issue["rule"], issue["message"], target_file))
@@ -256,17 +300,19 @@ def _collect_patches(
         else:
             logger.debug("Generated Patch Payload: [Block removed]")
 
-        # Validation manager integration step
+        # CRITICAL FIX FOR PROBLEM 1: Validation manager integration step safely handling empty removals
         if validation_manager is not None:
-            # Wrap patch code block safely inside a temporary context wrapper function
-            # This allows validating structural code segments containing 'return' or 'yield' cleanly
-            indented_payload = textwrap.indent(textwrap.dedent(fixed_block), "    ")
+            payload = fixed_block
+            if not payload.strip():
+                payload = "pass"
+
+            indented_payload = textwrap.indent(textwrap.dedent(payload), "    ")
             validated_code = f"def __validation_wrapper_context():\n{indented_payload}"
             
             report = validation_manager.validate_patch(
                 source_code=validated_code,
                 file_path=target_file,
-                run_ruff=False,  # Set to False. Let AST handle snippet syntax, file-level cleanup runs later.
+                run_ruff=False,
             )
             if not report.success:
                 failed_stage = report.failed_stage()
@@ -290,7 +336,15 @@ def _collect_patches(
                 )
                 continue
         
-        if code_block.strip() == fixed_block.strip():
+        # Empty patch explicit verification and logging override
+        if not fixed_block.strip():
+            logger.info("Empty patch accepted for rule %s", issue["rule"])
+
+        # Operational Delta Check: Prevents matching intentionally empty blocks as "no change"
+        if (
+            fixed_block.strip()
+            and code_block.strip() == fixed_block.strip()
+        ):
             msg = "Skipping rule execution (No operational delta generated by fixer)."
             logger.warning(" ⚠  %s: %s", msg, issue["rule"])
             failed_issues.add((issue["rule"], issue["message"], target_file))
@@ -557,7 +611,11 @@ def run_pipeline(target_files: list[str], max_iterations: int | None = None) -> 
     metrics["elapsed_time"] = time.perf_counter() - start_time
     _log_summary(iteration, metrics, len(failed_issues))
     return {
+        "success": True,
         "iterations": iteration,
         "fixed": metrics["patches_applied"],
-        "skipped": len(failed_issues),
+        "files_modified": metrics["files_modified"],
+        "issues_fixed": metrics["patches_applied"],
+        "remaining": len(failed_issues),
+        "metrics": metrics,
     }

@@ -122,6 +122,54 @@ Do NOT add print().
 Do NOT change program behaviour.
 """
 
+    # --------------------------------------
+    # Bandit B603
+    # --------------------------------------
+
+    elif issue.startswith("B603"):
+
+        special_rules = """
+Special Rule
+============
+
+The subprocess call uses untrusted input.
+
+Requirements
+============
+
+- Do NOT use shell=True.
+- Preserve the existing functionality.
+- Prefer passing command arguments as a list.
+- Do NOT concatenate user input into a shell command.
+- Do NOT invent sanitization functions.
+- Do NOT invent helper functions.
+- If no safe automatic fix exists,
+  return the ORIGINAL code block unchanged.
+"""
+
+    # --------------------------------------
+    # Bandit B607
+    # --------------------------------------
+
+    elif issue.startswith("B607"):
+
+        special_rules = """
+Special Rule
+============
+
+Bandit requires an absolute executable path.
+
+Requirements
+============
+
+- Use an absolute executable path ONLY if it is already known from the code.
+- Do NOT guess operating system paths.
+- Do NOT invent executable paths.
+- Do NOT hardcode Windows or Linux paths.
+- If an absolute executable path cannot be determined safely,
+  return the ORIGINAL code block unchanged.
+"""
+
     prompt = f"""
 You are an expert Python software engineer.
 
@@ -168,6 +216,10 @@ Critical Constraints
 - Do NOT invent classes.
 - Do NOT invent imports.
 - Never generate unrelated code.
+- Never generate surrounding code.
+- Never modify unrelated statements.
+- Never rewrite the entire function.
+- Return the original code unchanged if no safe fix exists.
 
 {special_rules}
 

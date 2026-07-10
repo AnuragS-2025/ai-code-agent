@@ -1,150 +1,169 @@
-import { useState, useEffect } from "react";
-import { FaWrench, FaCheckCircle, FaCode, FaArrowLeft, FaSpinner } from "react-icons/fa";
-import { useNavigate } from "react-router-dom";
-import * as api from "../services/api"; 
+import { useState, useEffect, useCallback } from "react";
+import { 
+  FaWrench, FaSpinner, FaShieldAlt, FaTimesCircle, FaCheckCircle
+} from "react-icons/fa";
+import { getIssues, applyCodeFix } from "../services/api";
 
-export default function Validation() {
-  const navigate = useNavigate();
+export default function Validation({ projectPath = "." }) {
   const [issues, setIssues] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [fixingId, setFixingId] = useState(null);
-  const [fixedLogs, setFixedLogs] = useState([]);
+  const [fixing, setFixing] = useState(false);
+
+  const fetchIssuesList = useCallback(async (isMounted) => {
+    try {
+      const safePath = projectPath ? projectPath.replace(/\\/g, "/") : ".";
+      const filters = { project_path: safePath };
+      
+      const response = await getIssues(filters, true);
+      
+      if (isMounted) {
+        if (Array.isArray(response)) {
+          setIssues(response);
+        } else if (response?.issues && Array.isArray(response.issues)) {
+          setIssues(response.issues);
+        } else {
+          setIssues([]);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to load validation hub parameters:", error);
+    } finally {
+      if (isMounted) setLoading(false);
+    }
+  }, [projectPath]);
 
   useEffect(() => {
     let isMounted = true;
-    
-    async function loadIssues() {
-      try {
-        if (api && typeof api.getIssues === "function") {
-          const data = await api.getIssues();
-          if (isMounted) {
-            // Priority ordering to maintain structural lists safely
-            setIssues(data?.issues || (Array.isArray(data) ? data : []));
-          }
-        }
-      } catch (err) {
-        console.warn("Using fallback static issues data:", err.message);
-        if (isMounted) {
-          setIssues([
-            { id: 1, file: "auth/service.py", line: 42, severity: "error", message: "Hardcoded password/token string found in environment map.", code: "JWT_SECRET = 'super_secret_rgba_token_key'", proposed: "import os\nJWT_SECRET = os.getenv('JWT_SECRET')" },
-            { id: 2, file: "database/connection.py", line: 18, severity: "warning", message: "Unused import statement detected (sys module imported but never evaluated).", code: "import os\nimport sys", proposed: "import os" }
-          ]);
-        }
-      } finally {
-        if (isMounted) setLoading(false);
+    const timer = setTimeout(() => {
+      if (isMounted) {
+        setLoading(true);
+        fetchIssuesList(isMounted);
       }
-    }
+    }, 0);
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [fetchIssuesList]);
 
-    loadIssues();
-    return () => { isMounted = false; };
-  }, []);
-
-  const handleApplyFix = async (id, file) => {
+  const handleApplyFixes = async () => {
+    if (!window.confirm("Are you sure you want to trigger the AI patch pipeline? This will modify flawed source files.")) return;
+    setFixing(true);
     try {
-      setFixingId(id);
-      setFixedLogs(prev => [...prev, `[AI AGENT] Communicating pipeline patch requirements for ${file}...`]);
-      
-      if (api && typeof api.applyCodeFix === "function") {
-        // Trigger real Axios call directly to FastAPI
-        await api.applyCodeFix(id, file);
-        setFixedLogs(prev => [...prev, `[SUCCESS] Refactored patch successfully pushed to repository.`]);
-      } else {
-        // Fallback simulation timer
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        setFixedLogs(prev => [...prev, `[SUCCESS] Simulated offline fallback commit for ${file}.`]);
-      }
-      
-      setIssues(prev => prev.filter(issue => issue.id !== id));
-    } catch (err) {
-      console.error(err);
-      setFixedLogs(prev => [...prev, `[CRITICAL ERROR] Patch deployment aborted: ${err.message}`]);
+      const safePath = projectPath ? projectPath.replace(/\\/g, "/") : ".";
+      const response = await applyCodeFix(safePath);
+      alert(response?.message || "🎉 AI Code Fix Pipeline deployed successfully! Reloading status...");
+      await fetchIssuesList(true);
+    } catch (error) {
+      console.error("Fix deployment pipeline error:", error);
+      alert("Failed to apply source alterations automatically.");
     } finally {
-      setFixingId(null);
+      setFixing(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="text-center p-10 text-cyan-400 font-medium">
-        Loading Agent Validation Hub...
-      </div>
-    );
-  }
+  const hasRealIssues = issues.length > 0 && !(issues.length === 1 && (issues[0].test_id === "SECURE" || issues[0].id === "clean-workspace-status"));
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-center gap-4">
-        <button 
-          onClick={() => navigate("/reports")} 
-          className="p-2.5 bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200 rounded-lg transition-colors"
-        >
-          <FaArrowLeft />
-        </button>
-        <div>
-          <h1 className="text-4xl font-bold">AI Autofix Validator</h1>
-          <p className="text-slate-400 mt-1">Review AI-proposed patches and trigger safe deployments into your codebase.</p>
+    <div className="space-y-6">
+      {/* Updated Header Layout */}
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center bg-slate-900 p-6 rounded-xl border border-slate-800 gap-4">
+        <div className="flex items-center gap-4">
+          <div>
+            <h2 className="text-2xl font-bold flex items-center gap-2">
+              <FaShieldAlt className="text-red-500" /> Validation Hub
+            </h2>
+            <p className="text-xs text-slate-400 mt-1 font-mono">
+              Workspace Scope: <span className="text-cyan-400">{projectPath}</span>
+            </p>
+          </div>
         </div>
+
+        {hasRealIssues && (
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={handleApplyFixes}
+              disabled={fixing}
+              className="flex items-center gap-2 bg-linear-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white text-sm font-medium px-5 py-3 rounded-xl transition shadow-lg shadow-emerald-500/20 disabled:opacity-50 cursor-pointer"
+            >
+              {fixing ? <FaSpinner className="animate-spin" /> : <FaWrench />} Auto-Fix All Flaws
+            </button>
+          </div>
+        )}
       </div>
 
-      <div className="grid grid-cols-3 gap-6 items-start">
-        <div className="col-span-2 space-y-4">
-          {issues.length === 0 ? (
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center space-y-3">
-              <div className="text-green-400 text-4xl flex justify-center"><FaCheckCircle /></div>
-              <h3 className="text-xl font-semibold text-slate-200">All Clear!</h3>
-              <p className="text-slate-500 text-sm">No remaining code vulnerabilities require validation actions.</p>
-            </div>
-          ) : (
-            issues.map((issue) => (
-              <div key={issue.id} className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <span className="text-sm font-mono text-cyan-400 font-bold">{issue.file} : Line {issue.line}</span>
-                    <p className="text-slate-300 text-sm mt-1">{issue.message}</p>
-                  </div>
-                  <button
-                    onClick={() => handleApplyFix(issue.id, issue.file)}
-                    disabled={fixingId !== null}
-                    className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-slate-950 px-4 py-2 rounded-lg text-xs font-bold transition-colors disabled:opacity-40"
-                  >
-                    {fixingId === issue.id ? <FaSpinner className="animate-spin" /> : <FaWrench />}
-                    Accept & Fix
-                  </button>
+      {/* Issues Render Pipeline */}
+      <div className="space-y-4">
+        {loading ? (
+          <p className="text-center p-10 font-mono text-slate-400 animate-pulse">Parsing target vulnerability vectors...</p>
+        ) : issues.length > 0 ? (
+          issues.map((issue, idx) => {
+            const isSecureStatus = issue.test_id === "SECURE" || issue.id === "clean-workspace-status";
+            
+            if (isSecureStatus) {
+              return (
+                <div key={idx} className="bg-slate-900/40 border border-green-500/30 rounded-xl p-10 text-center space-y-2">
+                  <FaCheckCircle className="text-emerald-400 text-5xl mx-auto mb-2 shadow-green-500" />
+                  <p className="text-lg font-bold text-slate-200">System Validated & Secure</p>
+                  <p className="text-sm text-slate-400 font-mono">No vulnerabilities require patching in the targeted workspace scope.</p>
                 </div>
+              );
+            }
 
-                <div className="grid grid-cols-2 gap-3 font-mono text-xs">
-                  <div className="bg-red-950/20 border border-red-900/30 rounded-lg p-3">
-                    <span className="text-red-400 block mb-1 font-semibold text-[10px] uppercase tracking-wider">Current Code</span>
-                    <pre className="text-red-200/80 overflow-x-auto whitespace-pre-wrap">{issue.code}</pre>
-                  </div>
-                  
-                  <div className="bg-emerald-950/20 border border-emerald-900/30 rounded-lg p-3">
-                    <span className="text-emerald-400 block mb-1 font-semibold text-[10px] uppercase tracking-wider">AI Proposed Patch</span>
-                    <pre className="text-emerald-200/80 overflow-x-auto whitespace-pre-wrap">{issue.proposed}</pre>
+            const rule = issue.rule || issue.test_id || "";
+
+            return (
+              <div key={idx} className="bg-slate-900/60 border border-slate-800 rounded-xl p-5 flex flex-col gap-4 hover:border-red-500/30 transition">
+                <div className="flex items-start gap-4 w-full">
+                  <FaTimesCircle className="text-red-500 text-xl mt-1 shrink-0" />
+                  <div className="space-y-1 w-full">
+                    <div className="flex justify-between items-start md:items-center flex-col md:flex-row gap-2">
+                      <h4 className="font-bold text-slate-200 text-base leading-snug">
+                        {issue.issue_text || issue.message || issue.title || "Vulnerability Vector Discovered"}
+                      </h4>
+                      
+                      {/* 🎯 FIXED: Tool Name & Rule ID now placed side-by-side using space-x/flex-row */}
+                      <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                        {/* Tool Name Badge */}
+                        <span className="bg-purple-900/20 text-purple-300 text-xs px-2 py-1 rounded uppercase font-bold tracking-wider">
+                          {rule.startsWith("B")
+                            ? "Bandit"
+                            : rule.startsWith("F")
+                            ? "Ruff"
+                            : "Semgrep"}
+                        </span>
+
+                        {/* Rule Code Badge */}
+                        <span className="bg-slate-800 text-cyan-400 text-xs px-2 py-1 rounded font-mono">
+                          {rule || "UNKNOWN"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Meta Location Box */}
+                    <p className="text-xs font-mono text-slate-400 bg-slate-950/50 inline-block px-2 py-1 rounded mt-1 border border-slate-800/50">
+                      Location: <span className="text-cyan-400">{issue.filename || issue.file || "Unknown File"}</span> | Line <span className="text-yellow-400">{issue.line_number || issue.line || "N/A"}</span>
+                    </p>
+
+                    {issue.code && (
+                      <pre className="bg-black/40 text-slate-300 p-3 rounded-lg text-xs font-mono mt-3 overflow-x-auto border border-slate-800">
+                        {issue.code}
+                      </pre>
+                    )}
                   </div>
                 </div>
               </div>
-            ))
-          )}
-        </div>
-
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
-          <div className="flex items-center gap-2 text-slate-200 font-semibold border-b border-slate-800 pb-2">
-            <FaCode className="text-cyan-400" />
-            <h3>Deployment Logs</h3>
+            );
+          })
+        ) : (
+          <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-10 text-center space-y-2">
+            <FaCheckCircle className="text-emerald-400 text-4xl mx-auto" />
+            <p className="text-base font-medium">Clean Audit Workspace Status!</p>
+            <p className="text-xs text-slate-500 font-mono">
+              No vulnerabilities found in this directory.
+            </p>
           </div>
-          <div className="bg-black/50 rounded-lg p-3 h-64 overflow-y-auto font-mono text-[11px] space-y-1.5 text-slate-400">
-            {fixedLogs.length === 0 ? (
-              <span className="text-slate-600 italic">Awaiting pipeline trigger signals...</span>
-            ) : (
-              fixedLogs.map((log, idx) => (
-                <p key={idx} className={log.includes("[SUCCESS]") ? "text-emerald-400" : log.includes("[CRITICAL]") ? "text-red-400" : "text-cyan-500"}>
-                  {log}
-                </p>
-              ))
-            )}
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );

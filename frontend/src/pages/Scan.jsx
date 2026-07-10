@@ -1,190 +1,276 @@
-import { useState } from "react";
-import { FaFolderOpen, FaPlay, FaCheckCircle, FaArrowRight, FaWrench } from "react-icons/fa";
-import { useNavigate } from "react-router-dom"; 
-import { startScan } from "../services/api";
+import { useState, useEffect, useRef } from "react";
+import {
+  FaPlay,
+  FaSpinner,
+  FaShieldVirus,
+  FaExclamationTriangle,
+  FaCheckCircle,
+  FaTimesCircle,
+  FaBug,
+} from "react-icons/fa";
 
-export default function Scan() {
-  const navigate = useNavigate();
+import { triggerScan, getReport } from "../services/api";
 
-  const [projectPath, setProjectPath] = useState("");
-  const [scanType, setScanType] = useState("full");
+export default function Scan({ projectPath = "." }) {
   const [loading, setLoading] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [logs, setLogs] = useState([]);
-  const [result, setResult] = useState(null);
+  const [scanning, setScanning] = useState(false);
 
-  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const [report, setReport] = useState(null);
+  const [error, setError] = useState(null);
 
-  const handleScan = async () => {
-    if (!projectPath.trim()) {
-      alert("Please enter a valid project path.");
-      return;
+  const lastFetchedPathRef = useRef("");
+
+  // ==========================================
+  // Load Existing Report
+  // ==========================================
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function fetchReport() {
+      try {
+        setLoading(true);
+
+        const safePath = projectPath.replace(/\\/g, "/");
+
+        if (lastFetchedPathRef.current === safePath) {
+          return;
+        }
+
+        lastFetchedPathRef.current = safePath;
+
+        const data = await getReport(safePath, true);
+
+        if (!mounted) return;
+
+        if (data) {
+          setReport(data);
+        }
+      } catch (err) {
+        console.warn("Report not available:", err);
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
     }
 
+    fetchReport();
+
+    return () => {
+      mounted = false;
+    };
+  }, [projectPath]);
+
+  // ==========================================
+  // Scan Handler
+  // ==========================================
+  const handleStartScan = async () => {
+    if (scanning) return;
+
+    const safePath = projectPath.replace(/\\/g, "/");
+
     try {
+      setScanning(true);
       setLoading(true);
-      setResult(null);
-      setLogs([]);
 
-      setProgress(10);
-      setLogs((prev) => [...prev, "[INFO] Initializing AI Code Agent pipeline..."]);
-      await wait(600);
+      setError(null);
+      setReport(null);
 
-      setProgress(30);
-      setLogs((prev) => [...prev, `[INFO] Loading project files from: ${projectPath}`]);
-      setLogs((prev) => [...prev, `[INFO] Running static analysis toolset (${scanType} mode)...`]);
-      await wait(800);
+      // Reset last fetched path so next report is always fresh
+      lastFetchedPathRef.current = "";
 
-      setProgress(60);
-      setLogs((prev) => [...prev, "[INFO] Connecting to AI backend for intelligence mapping..."]);
+      // Run scan
+      await triggerScan(safePath);
 
-      const response = await startScan({
-        project_path: projectPath,
-        scan_type: scanType
-      });
+      // Fetch latest report (ignore cache)
+      const latestReport = await getReport(safePath, true);
 
-      setProgress(85);
-      setLogs((prev) => [...prev, "[INFO] Parsing vulnerability vectors and structuring the report..."]);
-      await wait(600);
-      
-      setResult(response);
-      setProgress(100);
-      setLogs((prev) => [...prev, "[PASS] AI Agent scan pipeline completed with 0 exceptions."]);
-      
+      console.log("Latest Report:", latestReport);
+
+      if (latestReport?.data) {
+        setReport(latestReport.data);
+    } else {
+        setReport(latestReport);}
+      alert("🎉 Scan completed successfully! Analysis metrics loaded.");
+
     } catch (err) {
-      console.error(err);
-      setProgress(0);
-      setLogs((prev) => [...prev, "[ERROR] Scan pipeline cracked. Please check backend connection logs."]);
-      alert("Scan failed!");
+      console.error("Scan Error:", err);
+
+      setError(
+        err?.response?.data?.detail ||
+        "Failed to run scan pipeline."
+      );
     } finally {
+      setScanning(false);
       setLoading(false);
     }
   };
 
-  return (
-    <div className="space-y-8">
-      <h1 className="text-4xl font-bold">AI Code Scan</h1>
+  // ==========================================
+  // UI Helpers
+  // ==========================================
 
-      <div className="bg-slate-900 rounded-xl p-8 border border-slate-800">
-        <div className="space-y-6">
-          <div>
-            <label className="block mb-2 text-slate-300 font-medium">Project Path</label>
-            <div className="flex gap-3">
-              <input
-                value={projectPath}
-                onChange={(e) => setProjectPath(e.target.value)}
-                placeholder="C:/Projects/MyApp"
-                disabled={loading}
-                className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-slate-200 disabled:opacity-50 focus:outline-none focus:border-cyan-500"
-              />
-              <button 
-                disabled={loading}
-                className="bg-cyan-500 hover:bg-cyan-600 px-5 rounded-lg disabled:opacity-50 text-slate-950"
-              >
-                <FaFolderOpen />
-              </button>
-            </div>
-          </div>
+  const totalIssues =
+  report?.total_issues ??
+  report?.issues?.length ??
+  0;
 
-          <div>
-            <label className="block mb-2 text-slate-300 font-medium">Scan Type</label>
-            <select 
-              value={scanType}
-              onChange={(e) => setScanType(e.target.value)}
-              disabled={loading}
-              className="bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 w-full text-slate-200 disabled:opacity-50 focus:outline-none focus:border-cyan-500"
-            >
-              <option value="full">Full Scan (Lint + Security)</option>
-              <option value="security">Security Only</option>
-              <option value="lint">Lint Only</option>
-              <option value="validation">Validation Only</option>
-            </select>
-          </div>
+  const isSafe = totalIssues === 0;
 
-          <button 
-            onClick={handleScan}
-            disabled={loading}
-            className="flex items-center gap-3 bg-cyan-500 hover:bg-cyan-600 px-6 py-3 rounded-lg font-semibold disabled:opacity-50 text-slate-950 transition-colors"
-          >
-            <FaPlay className={loading ? "animate-spin" : ""} />
-            {loading ? "Scanning pipeline active..." : "Start Scan"}
-          </button>
+    return (
+    <div className="space-y-6 text-white">
+
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-slate-900 p-6 rounded-xl border border-slate-800 gap-4">
+
+        <div>
+          <h2 className="text-2xl font-bold flex items-center gap-2">
+            <FaShieldVirus className="text-cyan-400" />
+            Security Scanner Engine
+          </h2>
+
+          <p className="text-sm text-slate-400 mt-1 font-mono break-all">
+            Target Workspace :
+            <span className="text-yellow-400 ml-2">
+              {projectPath}
+            </span>
+          </p>
         </div>
-      </div>
 
-      <div className="bg-slate-900 rounded-xl p-6 border border-slate-800">
-        <h2 className="text-2xl font-semibold mb-5">Live Scan Progress</h2>
-        <div className="w-full h-4 rounded-full bg-slate-800 overflow-hidden">
-          <div 
-            className="h-full bg-cyan-500 transition-all duration-500 ease-out"
-            style={{ width: `${progress}%` }}
-          ></div>
-        </div>
-        <p className="mt-4 text-slate-400">
-          {loading ? `Scanning project... (${progress}%)` : progress === 100 ? "Scan Completed successfully!" : "System idle. Ready to initiate."}
-        </p>
-      </div>
-
-      <div className="bg-slate-900 rounded-xl p-6 border border-slate-800">
-        <h2 className="text-2xl font-semibold mb-5">Scan Logs</h2>
-        <div className="bg-black rounded-lg p-4 h-64 overflow-y-auto font-mono text-sm space-y-2">
-          {logs.length === 0 ? (
-            <p className="text-slate-600">No logs generated yet. Hit 'Start Scan' to trigger telemetry.</p>
+        <button
+          onClick={handleStartScan}
+          disabled={scanning}
+          className="flex items-center gap-2 bg-linear-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-medium px-6 py-3 rounded-xl transition disabled:opacity-50"
+        >
+          {scanning ? (
+            <>
+              <FaSpinner className="animate-spin" />
+              Running Scan...
+            </>
           ) : (
-            logs.map((log, index) => (
-              <p
-                key={index}
-                className={log.includes("[ERROR]") ? "text-red-400" : log.includes("[PASS]") ? "text-green-400" : "text-cyan-400"}
-              >
-                {log}
-              </p>
-            ))
+            <>
+              <FaPlay />
+              Run Code Analysis
+            </>
           )}
-        </div>
+        </button>
+
       </div>
 
-      {result && (
-        <div className="bg-slate-900 border border-green-500/30 rounded-xl p-6 space-y-6">
-          <div className="flex items-center gap-3 text-green-400 font-bold text-2xl">
-            <FaCheckCircle />
-            <span>Scan Complete</span>
-          </div>
-
-          <div className="grid grid-cols-4 gap-4 text-center">
-            <div className="bg-slate-950 p-4 rounded-lg border border-slate-800">
-              <span className="text-slate-500 block text-xs uppercase font-semibold">Files Scanned</span>
-              <span className="text-2xl font-bold text-slate-200">{result?.files_scanned ?? result?.total_scans ?? 42}</span>
-            </div>
-            <div className="bg-slate-950 p-4 rounded-lg border border-slate-800">
-              <span className="text-slate-500 block text-xs uppercase font-semibold">Issues Found</span>
-              <span className="text-2xl font-bold text-red-400">{result?.total_issues ?? result?.issues ?? 148}</span>
-            </div>
-            <div className="bg-slate-950 p-4 rounded-lg border border-slate-800">
-              <span className="text-slate-500 block text-xs uppercase font-semibold">Warnings</span>
-              <span className="text-2xl font-bold text-yellow-400">{result?.warnings ?? 19}</span>
-            </div>
-            <div className="bg-slate-950 p-4 rounded-lg border border-slate-800">
-              <span className="text-slate-500 block text-xs uppercase font-semibold">Errors</span>
-              <span className="text-2xl font-bold text-red-500">{result?.errors ?? 8}</span>
-            </div>
-          </div>
-
-          <div className="flex gap-4 pt-2">
-            <button 
-              onClick={() => navigate("/reports")} 
-              className="flex items-center gap-2 bg-cyan-500 hover:bg-cyan-600 text-slate-950 px-5 py-2.5 rounded-lg font-semibold transition-colors"
-            >
-              View Report <FaArrowRight className="text-sm" />
-            </button>
-            <button 
-              onClick={() => navigate("/validation")}
-              className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 px-5 py-2.5 rounded-lg font-semibold border border-slate-700 transition-colors"
-            >
-              <FaWrench className="text-sm" /> Fix Issues
-            </button>
-          </div>
+      {error && (
+        <div className="bg-red-900/30 border border-red-500 rounded-xl p-4 flex gap-3 items-center">
+          <FaExclamationTriangle className="text-red-400 text-2xl" />
+          <span>{error}</span>
         </div>
       )}
+
+      <div className="bg-slate-900 rounded-xl p-6 border border-slate-800">
+
+        <h3 className="text-lg font-bold mb-4">
+          Analysis Summary
+        </h3>
+
+        {loading ? (
+
+          <div className="flex flex-col items-center justify-center py-10 gap-3 text-slate-400">
+            <FaSpinner className="animate-spin text-3xl text-cyan-400" />
+            <p>Synchronizing latest artifacts...</p>
+          </div>
+
+        ) : report ? (
+
+          <div className="space-y-6">
+
+            <div
+              className={`p-5 rounded-xl border flex items-center gap-4 ${
+                isSafe
+                  ? "bg-green-900/20 border-green-500/50 text-green-400"
+                  : "bg-red-900/20 border-red-500/50 text-red-400"
+              }`}
+            >
+              {isSafe ? (
+                <FaCheckCircle className="text-4xl" />
+              ) : (
+                <FaTimesCircle className="text-4xl" />
+              )}
+
+              <div>
+                <h4 className="text-xl font-bold">
+                  {isSafe
+                    ? "Workspace is Secure"
+                    : "Vulnerabilities Detected"}
+                </h4>
+
+                <p className="text-sm opacity-80">
+                  {isSafe
+                    ? "No security issues detected."
+                    : `${totalIssues} issues found.`}
+                </p>
+              </div>
+
+            </div>
+
+            {!isSafe &&
+              report?.by_tool &&
+              Object.keys(report.by_tool).length > 0 && (
+
+                <div>
+
+                  <h4 className="text-sm font-bold uppercase text-slate-400 mb-3">
+                    Tool Breakdown
+                  </h4>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+
+                    {Object.entries(report.by_tool).map(
+                      ([tool, issues]) => (
+
+                        <div
+                          key={tool}
+                          className="bg-slate-950 rounded-lg border border-slate-800 p-4"
+                        >
+                          <div className="flex justify-between items-center">
+
+                            <span className="flex items-center gap-2 capitalize">
+                              <FaBug className="text-red-400" />
+                              {tool}
+                            </span>
+
+                            <span className="text-xs bg-red-500/10 border border-red-500/20 text-red-400 px-2 py-1 rounded">
+                              {typeof issues === "number"
+                                ? issues
+                                : Array.isArray(issues)
+                                ? issues.length
+                                : 0}
+                            </span>
+
+                          </div>
+                        </div>
+
+                      )
+                    )}
+
+                  </div>
+
+                </div>
+
+              )}
+
+          </div>
+
+        ) : (
+
+          <div className="text-center py-12 text-slate-500">
+            No analysis available. Click
+            <strong> Run Code Analysis </strong>
+            to begin.
+          </div>
+
+        )}
+
+      </div>
+
     </div>
   );
 }
